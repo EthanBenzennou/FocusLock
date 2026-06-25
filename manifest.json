@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "FocusLock Whitelist",
+  "version": "1.0",
+  "description": "Strict whitelist-based blocker locked behind a password.",
+  "permissions": [
+    "declarativeNetRequest",
+    "storage"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "options_page": "options.html",
+  "action": {
+    "default_title": "FocusLock Settings"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["blocked.html"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
