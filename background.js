@@ -185,8 +185,12 @@ chrome.runtime.onStartup.addListener(() => {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'UPDATE_WHITELIST') {
     if (message.safeSearch) {
-      const minutes = Math.max(1, Math.round(message.safeSearchMinutes || 20));
-      chrome.alarms.create('disable-safesearch-timer', { delayInMinutes: minutes });
+      const minutes = message.safeSearchMinutes ? Math.max(1, Math.round(message.safeSearchMinutes)) : 0;
+      if (minutes > 0) {
+        chrome.alarms.create('disable-safesearch-timer', { delayInMinutes: minutes });
+      } else {
+        chrome.alarms.clear('disable-safesearch-timer');
+      }
     } else {
       chrome.alarms.clear('disable-safesearch-timer');
     }

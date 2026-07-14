@@ -1,162 +1,109 @@
 document.addEventListener('DOMContentLoaded', () => {
   const queryString = window.location.search;
   const urlParams = new URLSearchParams(queryString);
-  const domain = urlParams.get('domain');
+
+  let rawDomain = urlParams.get('domain') || '';
+  try { rawDomain = decodeURIComponent(rawDomain); } catch (e) {}
+  const domain = rawDomain.replace(/^www\./, '');
 
   const urlIndex = queryString.indexOf('&url=');
-  const originalUrl = urlIndex !== -1 ? queryString.substring(urlIndex + 5) : `https://${domain}`;
+  let originalUrl = urlIndex !== -1 ? queryString.substring(urlIndex + 5) : `https://${domain}`;
+  try { originalUrl = decodeURIComponent(originalUrl); } catch (e) {}
 
-  document.getElementById('blocked-url').textContent = originalUrl;
+  let displayDomain = domain;
+  let pagePath = '';
+  try {
+    const u = new URL(originalUrl);
+    displayDomain = u.hostname.replace(/^www\./, '');
+    pagePath = u.pathname + u.search + u.hash;
+  } catch (e) {
+    // fallback
+  }
 
-  const passwordModal = document.getElementById('password-modal');
-  const passwordTitle = document.getElementById('password-modal-title');
-  const passwordDesc = document.getElementById('password-modal-desc');
-  const passwordInput = document.getElementById('modal-password');
-  const passwordError = document.getElementById('password-modal-error');
+  const isDomainOnly = !pagePath || pagePath === '/';
+  
+  document.getElementById('domain-name').textContent = isDomainOnly
+    ? displayDomain
+    : `${displayDomain}${pagePath}`;
 
-  const safeSearchModal = document.getElementById('safesearch-modal');
-  const safeSearchPassword = document.getElementById('safesearch-password');
-  const safeSearchDuration = document.getElementById('safesearch-duration');
-  const safeSearchError = document.getElementById('safesearch-modal-error');
+  const messageEl = document.getElementById('message');
+  const allowDomainBtn = document.getElementById('allow-domain-btn');
+  const allowPageBtn = document.getElementById('allow-page-btn');
+  const safeSearchBtn = document.getElementById('safesearch-btn');
 
-  async function verifyPassword(pwd) {
+  if (isDomainOnly) {
+    messageEl.textContent = "This website is not on your whitelist:";
+    allowDomainBtn.textContent = "Add Website to Whitelist";
+    allowPageBtn.style.display = 'none';
+  } else {
+    messageEl.textContent = "This page is not on your whitelist:";
+    allowDomainBtn.textContent = "Allow Entire Website";
+    allowPageBtn.textContent = "Allow This Specific Page";
+    allowPageBtn.style.display = 'block';
+  }
+
+  async function handleWhitelistAddition(entryToAdd) {
     const { passwordHash, passwordSalt } = await chrome.storage.local.get(['passwordHash', 'passwordSalt']);
-    return SecureStorage.verifyPassword(pwd, passwordHash, passwordSalt);
-  }
-
-  function openPasswordModal(title, description) {
-    return new Promise((resolve) => {
-      passwordTitle.textContent = title;
-      passwordDesc.textContent = description;
-      passwordInput.value = '';
-      passwordError.classList.remove('visible');
-      passwordError.textContent = 'Incorrect password.';
-      passwordModal.classList.add('open');
-      passwordInput.focus();
-
-      function cleanup(result) {
-        passwordModal.classList.remove('open');
-        passwordModalCancel.removeEventListener('click', onCancel);
-        passwordModalConfirm.removeEventListener('click', onConfirm);
-        passwordInput.removeEventListener('keydown', onKeydown);
-        resolve(result);
-      }
-
-      function onCancel() { cleanup(null); }
-      async function onConfirm() {
-        const pwd = passwordInput.value;
-        if (!pwd) {
-          passwordError.textContent = 'Please enter your password.';
-          passwordError.classList.add('visible');
-          return;
-        }
-        if (!(await verifyPassword(pwd))) {
-          passwordError.textContent = 'Incorrect password.';
-          passwordError.classList.add('visible');
-          passwordInput.value = '';
-          passwordInput.focus();
-          return;
-        }
-        cleanup(pwd);
-      }
-      function onKeydown(e) {
-        if (e.key === 'Enter') onConfirm();
-        if (e.key === 'Escape') onCancel();
-      }
-
-      const passwordModalCancel = document.getElementById('password-modal-cancel');
-      const passwordModalConfirm = document.getElementById('password-modal-confirm');
-      passwordModalCancel.addEventListener('click', onCancel);
-      passwordModalConfirm.addEventListener('click', onConfirm);
-      passwordInput.addEventListener('keydown', onKeydown);
-    });
-  }
-
-  async function addWhitelistEntry(entry) {
-    const whitelist = await SecureStorage.getWhitelist();
-    const parsed = WhitelistUtils.parseEntry(entry);
-    if (!parsed) return;
-
-    const keys = new Set(whitelist.map((item) => WhitelistUtils.parseEntry(item)?.key).filter(Boolean));
-    if (!keys.has(parsed.key)) whitelist.push(parsed.raw);
-
-    await SecureStorage.saveWhitelist(whitelist);
-    chrome.runtime.sendMessage({ type: 'UPDATE_WHITELIST', whitelist, safeSearch: false }, () => {
-      window.location.href = originalUrl;
-    });
-  }
-
-  async function handleWhitelist(scope) {
-    const isPage = scope === 'page';
-    const pwd = await openPasswordModal(
-      isPage ? 'Whitelist This Page' : 'Whitelist Whole Domain',
-      isPage
-        ? 'Enter your password to allow only this specific page.'
-        : 'Enter your password to allow the entire domain.'
-    );
+    const pwd = prompt(`Enter password to add ${entryToAdd} to your whitelist:`);
     if (pwd === null) return;
 
-    const entry = isPage
-      ? WhitelistUtils.pageEntryFromUrl(originalUrl)
-      : WhitelistUtils.domainEntryFromUrl(originalUrl);
-
-    if (!entry) return alert('Could not parse this URL.');
-    await addWhitelistEntry(entry.raw);
-  }
-
-  document.getElementById('whitelist-domain-btn').addEventListener('click', () => handleWhitelist('domain'));
-  document.getElementById('whitelist-page-btn').addEventListener('click', () => handleWhitelist('page'));
-
-  function openSafeSearchModal() {
-    safeSearchPassword.value = '';
-    safeSearchDuration.value = '';
-    safeSearchError.classList.remove('visible');
-    safeSearchError.textContent = '';
-    safeSearchModal.classList.add('open');
-    safeSearchPassword.focus();
-  }
-
-  function closeSafeSearchModal() {
-    safeSearchModal.classList.remove('open');
-  }
-
-  document.getElementById('safesearch-btn').addEventListener('click', openSafeSearchModal);
-  document.getElementById('safesearch-modal-cancel').addEventListener('click', closeSafeSearchModal);
-
-  document.getElementById('safesearch-modal-confirm').addEventListener('click', async () => {
-    const pwd = safeSearchPassword.value;
-    const minutes = WhitelistUtils.parseDurationMinutes(safeSearchDuration.value);
-
-    if (!pwd) {
-      safeSearchError.textContent = 'Please enter your password.';
-      safeSearchError.classList.add('visible');
-      return;
-    }
-    if (!minutes) {
-      safeSearchError.textContent = 'Enter a duration like "5 minutes", "10 mins", or "1 hour".';
-      safeSearchError.classList.add('visible');
+    const ok = await SecureStorage.verifyPassword(pwd, passwordHash, passwordSalt);
+    if (!ok) {
+      alert("Incorrect password.");
       return;
     }
 
-    if (!(await verifyPassword(pwd))) {
-      safeSearchError.textContent = 'Incorrect password.';
-      safeSearchError.classList.add('visible');
+    const currentWhitelist = await SecureStorage.getWhitelist();
+    if (!currentWhitelist.includes(entryToAdd)) {
+      currentWhitelist.push(entryToAdd);
+      await SecureStorage.saveWhitelist(currentWhitelist);
+      
+      chrome.runtime.sendMessage({
+        type: 'UPDATE_WHITELIST',
+        whitelist: currentWhitelist,
+        safeSearch: false
+      }, () => {
+        window.location.href = originalUrl;
+      });
+    } else {
+      window.location.href = originalUrl;
+    }
+  }
+
+  allowDomainBtn.addEventListener('click', () => {
+    handleWhitelistAddition(displayDomain);
+  });
+
+  allowPageBtn.addEventListener('click', () => {
+    handleWhitelistAddition(`${displayDomain}${pagePath}`);
+  });
+
+  safeSearchBtn.addEventListener('click', async () => {
+    const { passwordHash, passwordSalt } = await chrome.storage.local.get(['passwordHash', 'passwordSalt']);
+    const pwd = prompt("Enter password to temporarily open the web in safe mode:");
+    if (pwd === null) return;
+
+    const ok = await SecureStorage.verifyPassword(pwd, passwordHash, passwordSalt);
+    if (!ok) {
+      alert("Incorrect password.");
       return;
     }
 
-    const whitelist = await SecureStorage.getWhitelist();
+    const durationInput = prompt("Enter safe search duration (e.g. '20 mins', '1 hour'). Leave blank for infinite:");
+    if (durationInput === null) return;
+
+    const minutes = WhitelistUtils.parseDurationMinutes(durationInput) || 0;
+
+    const currentWhitelist = await SecureStorage.getWhitelist();
     await chrome.storage.local.set({ safeSearch: true });
+
     chrome.runtime.sendMessage({
       type: 'UPDATE_WHITELIST',
-      whitelist,
+      whitelist: currentWhitelist,
       safeSearch: true,
       safeSearchMinutes: minutes
     }, () => {
       window.location.href = originalUrl;
     });
-  });
-
-  safeSearchDuration.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') document.getElementById('safesearch-modal-confirm').click();
   });
 });

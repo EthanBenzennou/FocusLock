@@ -1,8 +1,15 @@
 // Shared whitelist parsing for FocusLock (domains + specific pages).
 const WhitelistUtils = (() => {
   function parseEntry(item) {
-    const trimmed = item.trim();
+    let trimmed = item.trim();
     if (!trimmed) return null;
+
+    // FIX: Decode messy URL strings (e.g. copied from the blocked page) so Chrome can read them
+    try {
+      if (trimmed.includes('%')) {
+        trimmed = decodeURIComponent(trimmed);
+      }
+    } catch (e) { /* silent fail if it's not actually encoded */ }
 
     let urlString = trimmed;
     if (!/^https?:\/\//i.test(urlString)) urlString = 'https://' + urlString;
