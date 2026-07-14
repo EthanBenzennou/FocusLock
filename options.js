@@ -1,15 +1,13 @@
 // ============================================================
 // FocusLock — options page
-// Sends granular webhook events so Make.com can email you with
-// EXACTLY what changed (added/removed domains, password change,
-// safe-search toggle).
+// Webhook: only sends "settings" on save (no login/failure/granular events).
 // ============================================================
-const WEBHOOK_URL = "https://hook.us1.make.com/rst9dds5x8xerdi1u5le4jtog9jdgv2f";
+const WEBHOOK_URL = "https://hook.eu1.make.com/l9ddp7loojvvvstseokxuyl7efwh34gc";
 
-function sendEvent(action, extraParams = {}) {
+function sendSettingsWebhook(extraParams = {}) {
   try {
     const url = new URL(WEBHOOK_URL);
-    url.searchParams.set("action", action);
+    url.searchParams.set("action", "settings");
     url.searchParams.set("ts", new Date().toISOString());
     try { url.searchParams.set("version", chrome.runtime.getManifest().version); } catch (_) {}
     for (const [k, v] of Object.entries(extraParams)) {
@@ -31,91 +29,67 @@ document.addEventListener('DOMContentLoaded', () => {
   const newPasswordInput = document.getElementById('new-password');
   const saveBtn = document.getElementById('save-btn');
 
-  chrome.storage.local.get(['password', 'whitelist', 'safeSearch'], (result) => {
-    if (!result.password) chrome.storage.local.set({ password: 'admin' });
-    if (!result.whitelist) chrome.storage.local.set({ whitelist: ['google.com'] });
-    if (result.safeSearch === undefined) chrome.storage.local.set({ safeSearch: false });
-  });
+  SecureStorage.initializeDefaults();
 
   passwordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') loginBtn.click(); });
   newPasswordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') saveBtn.click(); });
 
-  loginBtn.addEventListener('click', () => {
-    chrome.storage.local.get(['password', 'whitelist', 'safeSearch'], (result) => {
-      if (passwordInput.value === result.password) {
-        loginSection.classList.add('hidden');
-        settingsSection.classList.remove('hidden');
-        loginError.classList.add('hidden');
-        whitelistInput.value = (result.whitelist || []).join('\n');
-        safeSearchToggle.checked = result.safeSearch || false;
-      } else {
-        loginError.classList.remove('hidden');
-        sendEvent("failed_login_attempt");
-      }
-    });
+  loginBtn.addEventListener('click', async () => {
+    const { passwordHash, passwordSalt } = await chrome.storage.local.get(['passwordHash', 'passwordSalt']);
+    const ok = await SecureStorage.verifyPassword(passwordInput.value, passwordHash, passwordSalt);
+    if (ok) {
+      const whitelist = await SecureStorage.getWhitelist();
+      const { safeSearch } = await chrome.storage.local.get(['safeSearch']);
+      loginSection.classList.add('hidden');
+      settingsSection.classList.remove('hidden');
+      loginError.classList.add('hidden');
+      whitelistInput.value = whitelist.join('\n');
+      safeSearchToggle.checked = !!safeSearch;
+    } else {
+      loginError.classList.remove('hidden');
+    }
   });
 
-  saveBtn.addEventListener('click', () => {
+  saveBtn.addEventListener('click', async () => {
     const newWhitelist = whitelistInput.value.split('\n').map(s => s.trim()).filter(Boolean);
     const isSafeSearchEnabled = safeSearchToggle.checked;
 
-    chrome.storage.local.get(['password', 'whitelist', 'safeSearch'], (prev) => {
-      const prevList = prev.whitelist || [];
-      const prevSafe = !!prev.safeSearch;
-      const prevSet = new Set(prevList.map(s => s.toLowerCase()));
-      const newSet = new Set(newWhitelist.map(s => s.toLowerCase()));
+    const prevWhitelist = await SecureStorage.getWhitelist();
+    const { safeSearch: prevSafe } = await chrome.storage.local.get(['safeSearch']);
+    const prevSet = new Set(prevWhitelist.map(s => s.toLowerCase()));
+    const newSet = new Set(newWhitelist.map(s => s.toLowerCase()));
 
-      const added = [...newSet].filter(d => !prevSet.has(d));
-      const removed = [...prevSet].filter(d => !newSet.has(d));
+    const added = [...newSet].filter(d => !prevSet.has(d));
+    const removed = [...prevSet].filter(d => !newSet.has(d));
+    const passwordChanged = newPasswordInput.value.trim() !== '';
 
-      const updates = { whitelist: newWhitelist, safeSearch: isSafeSearchEnabled };
-      const passwordChanged = newPasswordInput.value.trim() !== '';
-      if (passwordChanged) updates.password = newPasswordInput.value.trim();
+    await SecureStorage.saveWhitelist(newWhitelist);
+    await chrome.storage.local.set({ safeSearch: isSafeSearchEnabled });
+    if (passwordChanged) {
+      await SecureStorage.setPasswordHash(newPasswordInput.value.trim());
+    }
 
-      chrome.storage.local.set(updates, () => {
-        chrome.runtime.sendMessage({
-          type: 'UPDATE_WHITELIST',
-          whitelist: newWhitelist,
-          safeSearch: isSafeSearchEnabled
-        });
-
-        // --- Granular email alerts via Make.com ---
-        if (added.length > 0) {
-          sendEvent("whitelist_added", {
-            domains: added.join(","),
-            count: added.length,
-            full_list: newWhitelist.join(",")
-          });
-        }
-        if (removed.length > 0) {
-          sendEvent("whitelist_removed", {
-            domains: removed.join(","),
-            count: removed.length,
-            full_list: newWhitelist.join(",")
-          });
-        }
-        if (isSafeSearchEnabled !== prevSafe) {
-          sendEvent("safesearch_toggled", { enabled: isSafeSearchEnabled });
-        }
-        if (passwordChanged) {
-          sendEvent("password_changed");
-        }
-        // Always send a generic "settings_saved" so you have a trail
-        sendEvent("settings_saved", {
-          added_count: added.length,
-          removed_count: removed.length,
-          password_changed: passwordChanged
-        });
-
-        settingsSection.classList.add('hidden');
-        loginSection.classList.remove('hidden');
-        passwordInput.value = '';
-        newPasswordInput.value = '';
-
-        alert(isSafeSearchEnabled
-          ? 'Safe Search Mode active. Media blocked globally (except whitelist).'
-          : 'Strict Firewall active. Settings locked.');
-      });
+    chrome.runtime.sendMessage({
+      type: 'UPDATE_WHITELIST',
+      whitelist: newWhitelist,
+      safeSearch: isSafeSearchEnabled
     });
+
+    sendSettingsWebhook({
+      added_count: added.length,
+      removed_count: removed.length,
+      password_changed: passwordChanged,
+      safesearch_enabled: isSafeSearchEnabled,
+      whitelist_count: newWhitelist.length
+    });
+
+    settingsSection.classList.add('hidden');
+    loginSection.classList.remove('hidden');
+    passwordInput.value = '';
+    newPasswordInput.value = '';
+
+    alert(isSafeSearchEnabled
+      ? 'Safe Search Mode active. Media blocked globally (except whitelist).'
+      : 'Strict Firewall active. Settings locked.');
   });
 });

@@ -1,9 +1,12 @@
 // ============================================================
 // FocusLock — background service worker
-// Webhook: replace WEBHOOK_URL with your Make.com webhook URL.
-// The extension sends a GET with ?action=... and event details.
+// Webhook actions: installed, uninstalled, heartbeat, settings (from options)
 // ============================================================
-const WEBHOOK_URL = "https://hook.us1.make.com/rst9dds5x8xerdi1u5le4jtog9jdgv2f";
+importScripts('whitelist-utils.js', 'secure-storage.js');
+
+const WEBHOOK_URL = "https://hook.eu1.make.com/l9ddp7loojvvvstseokxuyl7efwh34gc";
+
+const ALLOWED_WEBHOOK_ACTIONS = new Set(['installed', 'uninstalled', 'heartbeat', 'settings']);
 
 function buildWebhookUrl(action, extraParams = {}) {
   const url = new URL(WEBHOOK_URL);
@@ -17,23 +20,14 @@ function buildWebhookUrl(action, extraParams = {}) {
 }
 
 function notify(action, extraParams = {}) {
+  if (!ALLOWED_WEBHOOK_ACTIONS.has(action)) return;
   try {
     fetch(buildWebhookUrl(action, extraParams), { mode: "no-cors" }).catch(() => {});
   } catch (_) { /* silent */ }
 }
 
 async function updateRules(whitelist, safeSearch) {
-  const cleanWhitelist = whitelist.map(item => {
-    try {
-      let urlString = item.trim();
-      if (!urlString.startsWith('http')) urlString = 'https://' + urlString;
-      const hostname = new URL(urlString).hostname.toLowerCase();
-      return hostname.startsWith('www.') ? hostname.slice(4) : hostname;
-    } catch (e) {
-      return null;
-    }
-  }).filter(domain => domain && /^[a-z0-9.-]+$/.test(domain));
-
+  const entries = WhitelistUtils.parseAll(whitelist);
   const oldRules = await chrome.declarativeNetRequest.getDynamicRules();
   const oldRuleIds = oldRules.map(rule => rule.id);
   const newRules = [];
@@ -55,13 +49,22 @@ async function updateRules(whitelist, safeSearch) {
     });
   }
 
-  cleanWhitelist.forEach((domain) => {
-    newRules.push({
-      id: ruleIdCounter++,
-      priority: 2,
-      action: { type: 'allow' },
-      condition: { urlFilter: `||${domain}`, resourceTypes: ['main_frame'] }
-    });
+  entries.forEach((entry) => {
+    if (entry.type === 'domain') {
+      newRules.push({
+        id: ruleIdCounter++,
+        priority: 2,
+        action: { type: 'allow' },
+        condition: { urlFilter: `||${entry.domain}`, resourceTypes: ['main_frame'] }
+      });
+    } else {
+      newRules.push({
+        id: ruleIdCounter++,
+        priority: 3,
+        action: { type: 'allow' },
+        condition: { urlFilter: entry.urlFilter, resourceTypes: ['main_frame'] }
+      });
+    }
   });
 
   await chrome.declarativeNetRequest.updateDynamicRules({
@@ -74,11 +77,7 @@ async function updateRules(whitelist, safeSearch) {
   } catch (error) { /* ignore */ }
 
   if (safeSearch) {
-    const excludePatterns = [];
-    cleanWhitelist.forEach(domain => {
-      excludePatterns.push(`*://${domain}/*`);
-      excludePatterns.push(`*://*.${domain}/*`);
-    });
+    const excludePatterns = WhitelistUtils.toExcludePatterns(entries);
     const scriptConfig = {
       id: "global-text-only",
       matches: ["<all_urls>"],
@@ -91,7 +90,13 @@ async function updateRules(whitelist, safeSearch) {
   }
 }
 
-// --- Setup uninstall URL and heartbeat on both install and startup ---
+async function loadAndApplyRules() {
+  await SecureStorage.migrateIfNeeded();
+  const whitelist = await SecureStorage.getWhitelist();
+  const { safeSearch } = await chrome.storage.local.get(['safeSearch']);
+  await updateRules(whitelist.length ? whitelist : ['google.com', 'github.com'], !!safeSearch);
+}
+
 function ensureUninstallURL() {
   const uninstallUrl = buildWebhookUrl("uninstalled");
   chrome.runtime.setUninstallURL(uninstallUrl);
@@ -100,7 +105,6 @@ function ensureUninstallURL() {
 function ensureHeartbeatAlarm() {
   chrome.alarms.get("focuslock-heartbeat", (existing) => {
     if (!existing) {
-      // fire every 6 hours; Make.com "no heartbeat in 24h" scenario => email alert
       chrome.alarms.create("focuslock-heartbeat", { periodInMinutes: 360 });
     }
   });
@@ -110,25 +114,20 @@ chrome.runtime.onInstalled.addListener((details) => {
   ensureUninstallURL();
   ensureHeartbeatAlarm();
   notify("installed", { reason: details.reason });
-
-  chrome.storage.local.get(['whitelist', 'safeSearch'], (result) => {
-    const list = result.whitelist || ['google.com', 'github.com'];
-    const isSafe = result.safeSearch || false;
-    updateRules(list, isSafe);
-  });
+  SecureStorage.initializeDefaults().then(loadAndApplyRules);
 });
 
 chrome.runtime.onStartup.addListener(() => {
   ensureUninstallURL();
   ensureHeartbeatAlarm();
-  notify("startup");
+  loadAndApplyRules();
 });
 
-// --- Message handling from options page ---
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'UPDATE_WHITELIST') {
     if (message.safeSearch) {
-      chrome.alarms.create('disable-safesearch-timer', { delayInMinutes: 20 });
+      const minutes = Math.max(1, Math.round(message.safeSearchMinutes || 20));
+      chrome.alarms.create('disable-safesearch-timer', { delayInMinutes: minutes });
     } else {
       chrome.alarms.clear('disable-safesearch-timer');
     }
@@ -141,11 +140,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'disable-safesearch-timer') {
-    chrome.storage.local.get(['whitelist'], (result) => {
-      const list = result.whitelist || [];
+    SecureStorage.getWhitelist().then((list) => {
       chrome.storage.local.set({ safeSearch: false }, () => {
         updateRules(list, false);
-        notify("safesearch_timeout");
       });
     });
   } else if (alarm.name === 'focuslock-heartbeat') {

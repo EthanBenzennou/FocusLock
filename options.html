@@ -25,8 +25,8 @@
       <button id="login-btn">Unlock</button>
     </div>
     <div id="settings-section" class="hidden">
-      <p><strong>Whitelisted Domains (one per line):</strong></p>
-      <textarea id="whitelist-input" rows="6" placeholder="e.g., github.com\ngoogle.com"></textarea>
+      <p><strong>Whitelisted Domains or Pages (one per line):</strong></p>
+      <textarea id="whitelist-input" rows="8" placeholder="Whole domain:&#10;github.com&#10;google.com&#10;&#10;Specific page only:&#10;stackoverflow.com/questions/12345&#10;wikipedia.org/wiki/Focus"></textarea>
       <div class="mode-box">
         <label>
           <input type="checkbox" id="safesearch-toggle">
@@ -41,6 +41,8 @@
       <button id="save-btn">Save Settings & Lock</button>
     </div>
   </div>
+  <script src="whitelist-utils.js"></script>
+  <script src="secure-storage.js"></script>
   <script src="options.js"></script>
 </body>
 </html>
