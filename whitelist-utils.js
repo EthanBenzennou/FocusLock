@@ -98,6 +98,46 @@ const WhitelistUtils = (() => {
     return patterns;
   }
 
+  function domainMatches(hostname, domain) {
+    const host = hostname.toLowerCase().replace(/^www\./, '');
+    return host === domain || host.endsWith('.' + domain);
+  }
+
+  function pageMatches(url, entry) {
+    const fullPath = (url.pathname + url.search + url.hash).toLowerCase();
+    const entryPath = entry.path.toLowerCase();
+    if (fullPath === entryPath) return true;
+    if (entryPath.includes('?')) return false;
+    return fullPath.startsWith(entryPath + '/') || fullPath.startsWith(entryPath + '?');
+  }
+
+  function isUrlAllowed(urlString, entries, options = {}) {
+    if (options.safeSearch) return true;
+
+    let url;
+    try {
+      url = new URL(urlString);
+    } catch (_) {
+      return false;
+    }
+
+    if (!/^https?:$/i.test(url.protocol)) return true;
+
+    const hostname = url.hostname.toLowerCase().replace(/^www\./, '');
+
+    for (const entry of entries) {
+      if (entry.type === 'domain' && domainMatches(hostname, entry.domain)) return true;
+    }
+
+    for (const entry of entries) {
+      if (entry.type === 'page' && domainMatches(hostname, entry.domain) && pageMatches(url, entry)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   function parseDurationMinutes(input) {
     const text = String(input || '').trim().toLowerCase();
     if (!text) return null;
@@ -111,5 +151,5 @@ const WhitelistUtils = (() => {
     return null;
   }
 
-  return { parseEntry, parseAll, pageEntryFromUrl, domainEntryFromUrl, toExcludePatterns, parseDurationMinutes };
+  return { parseEntry, parseAll, pageEntryFromUrl, domainEntryFromUrl, toExcludePatterns, parseDurationMinutes, isUrlAllowed, domainMatches };
 })();

@@ -2,7 +2,7 @@
 
 A Chrome extension that blocks the entire web by default and only allows sites you explicitly whitelist. Settings are locked behind a password, with optional Safe Search mode for temporary, text-only browsing.
 
-**Version:** 1.2  
+**Version:** 1.3  
 **Manifest:** V3
 
 ---
@@ -36,6 +36,10 @@ From the blocked page you can choose:
 - Whitelisted sites are excluded from media blocking.
 - Duration is customizable when enabling from the blocked page (e.g. `5 minutes`, `10 mins`, `1 hour`).
 - Automatically turns off when the timer expires.
+- When Safe Search ends, all **non-whitelisted** tabs are reloaded so temporarily opened pages get blocked again. Whitelisted tabs stay open.
+
+### SPA / client-side navigation protection
+Sites like YouTube change the URL without a full page load (via `pushState`). FocusLock watches for these in-page navigations and blocks the new URL if it is not whitelisted — even when only a specific page (not the whole domain) was allowed.
 
 ### Secure storage
 Sensitive data is not stored in plaintext:
@@ -133,7 +137,8 @@ The redirect rule is removed. A global content script injects `hide-media.css` t
 | `options.html` / `options.js` | Password-gated settings UI |
 | `blocked.html` / `blocked.js` | Blocked-site interstitial with unlock modals |
 | `secure-storage.js` | Password hashing and whitelist encryption |
-| `whitelist-utils.js` | Domain/page parsing and duration parsing |
+| `whitelist-utils.js` | Domain/page parsing, URL matching, duration parsing |
+| `navigation-guard.js` | Blocks in-page SPA navigations to non-whitelisted URLs |
 | `hide-media.css` | CSS to hide images and video in Safe Search mode |
 
 ---

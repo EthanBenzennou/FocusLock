@@ -8,6 +8,9 @@ const WEBHOOK_URL = "https://hook.eu1.make.com/l9ddp7loojvvvstseokxuyl7efwh34gc"
 
 const ALLOWED_WEBHOOK_ACTIONS = new Set(['installed', 'uninstalled', 'heartbeat', 'settings']);
 
+let cachedEntries = [];
+let cachedSafeSearch = false;
+
 function buildWebhookUrl(action, extraParams = {}) {
   const url = new URL(WEBHOOK_URL);
   url.searchParams.set("action", action);
@@ -26,8 +29,43 @@ function notify(action, extraParams = {}) {
   } catch (_) { /* silent */ }
 }
 
+async function refreshCache(whitelist, safeSearch) {
+  const list = whitelist && whitelist.length ? whitelist : ['google.com', 'github.com'];
+  cachedEntries = WhitelistUtils.parseAll(list);
+  cachedSafeSearch = !!safeSearch;
+}
+
+function isAllowedUrl(urlString) {
+  return WhitelistUtils.isUrlAllowed(urlString, cachedEntries, { safeSearch: cachedSafeSearch });
+}
+
+function blockedPageUrl(urlString) {
+  const parsed = new URL(urlString);
+  return chrome.runtime.getURL('blocked.html') +
+    '?domain=' + encodeURIComponent(parsed.hostname) +
+    '&url=' + encodeURIComponent(urlString);
+}
+
+async function reloadNonWhitelistedTabs() {
+  const tabs = await chrome.tabs.query({});
+  const extensionPrefix = chrome.runtime.getURL('');
+
+  for (const tab of tabs) {
+    if (!tab.id || !tab.url) continue;
+    if (/^(chrome|chrome-extension|edge|about|devtools):/i.test(tab.url)) continue;
+    if (tab.url.startsWith(extensionPrefix)) continue;
+    if (isAllowedUrl(tab.url)) continue;
+
+    try {
+      await chrome.tabs.reload(tab.id);
+    } catch (_) { /* tab may have closed */ }
+  }
+}
+
 async function updateRules(whitelist, safeSearch) {
   const entries = WhitelistUtils.parseAll(whitelist);
+  await refreshCache(whitelist, safeSearch);
+
   const oldRules = await chrome.declarativeNetRequest.getDynamicRules();
   const oldRuleIds = oldRules.map(rule => rule.id);
   const newRules = [];
@@ -73,7 +111,7 @@ async function updateRules(whitelist, safeSearch) {
   });
 
   try {
-    await chrome.scripting.unregisterContentScripts({ ids: ["global-text-only"] });
+    await chrome.scripting.unregisterContentScripts({ ids: ["global-text-only", "navigation-guard"] });
   } catch (error) { /* ignore */ }
 
   if (safeSearch) {
@@ -87,6 +125,14 @@ async function updateRules(whitelist, safeSearch) {
     };
     if (excludePatterns.length > 0) scriptConfig.excludeMatches = excludePatterns;
     await chrome.scripting.registerContentScripts([scriptConfig]);
+  } else {
+    await chrome.scripting.registerContentScripts([{
+      id: "navigation-guard",
+      matches: ["http://*/*", "https://*/*"],
+      js: ["navigation-guard.js"],
+      runAt: "document_start",
+      allFrames: false
+    }]);
   }
 }
 
@@ -95,6 +141,16 @@ async function loadAndApplyRules() {
   const whitelist = await SecureStorage.getWhitelist();
   const { safeSearch } = await chrome.storage.local.get(['safeSearch']);
   await updateRules(whitelist.length ? whitelist : ['google.com', 'github.com'], !!safeSearch);
+}
+
+async function handleSpaNavigation(details) {
+  if (details.frameId !== 0) return;
+  if (cachedSafeSearch) return;
+  if (isAllowedUrl(details.url)) return;
+
+  try {
+    await chrome.tabs.update(details.tabId, { url: blockedPageUrl(details.url) });
+  } catch (_) { /* ignore */ }
 }
 
 function ensureUninstallURL() {
@@ -109,6 +165,9 @@ function ensureHeartbeatAlarm() {
     }
   });
 }
+
+chrome.webNavigation.onHistoryStateUpdated.addListener(handleSpaNavigation);
+chrome.webNavigation.onReferenceFragmentUpdated.addListener(handleSpaNavigation);
 
 chrome.runtime.onInstalled.addListener((details) => {
   ensureUninstallURL();
@@ -136,14 +195,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
     return true;
   }
+
+  if (message.type === 'CHECK_URL') {
+    sendResponse({ allowed: isAllowedUrl(message.url) });
+    return false;
+  }
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'disable-safesearch-timer') {
-    SecureStorage.getWhitelist().then((list) => {
-      chrome.storage.local.set({ safeSearch: false }, () => {
-        updateRules(list, false);
-      });
+    SecureStorage.getWhitelist().then(async (list) => {
+      await chrome.storage.local.set({ safeSearch: false });
+      await updateRules(list, false);
+      await reloadNonWhitelistedTabs();
     });
   } else if (alarm.name === 'focuslock-heartbeat') {
     notify("heartbeat");
