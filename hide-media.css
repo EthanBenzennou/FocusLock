@@ -1,0 +1,49 @@
+
+*:not([class*="icon" i]):not([class*="btn" i]):not([class*="button" i]):not([role="button"]):not([class*="rc-" i]):not([class*="captcha" i]):not([id*="captcha" i]):not([title*="captcha" i]) {
+    background-image: none !important;
+}
+
+img:not([src*="captcha" i]):not([class*="captcha" i]):not([id*="captcha" i]) {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+/*    width: 0px !important;*/
+/*    height: 0px !important;*/
+    pointer-events: none !important;
+    position: absolute !important;
+    z-index: -9999 !important;
+}
+
+video,
+audio,
+picture,
+object,
+embed,
+canvas:not([class*="rc-" i]):not([class*="captcha" i]):not([id*="captcha" i]), /* Canvas is often used to draw captcha puzzles */
+source {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+/*    width: 0px !important;*/
+/*    height: 0px !important;*/
+    max-width: 0px !important;
+    max-height: 0px !important;
+    pointer-events: none !important;
+    position: absolute !important;
+    z-index: -9999 !important;
+}
+
+/* Target elements explicitly designated with image/video roles */
+div[role="img"], div[role="video"], g-img {
+    display: none !important;
+}
+
+span[role="img"], div[role="video"], g-img {
+    display: none !important;
+}
+
+/* Kill YouTube and custom web-component video players completely */
+ytd-player, .html5-video-player, .html5-video-container, .video-stream, .vjs-tech {
+    display: none !important;
+    visibility: hidden !important;
+}

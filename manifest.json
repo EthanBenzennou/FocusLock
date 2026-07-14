@@ -5,7 +5,9 @@
   "description": "Strict whitelist-based blocker locked behind a password.",
   "permissions": [
     "declarativeNetRequest",
-    "storage"
+    "storage",
+    "scripting",
+    "alarms"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -21,6 +23,15 @@
     {
       "resources": ["blocked.html"],
       "matches": ["<all_urls>"]
+    }
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "*://www.google.com/*",
+        "*://google.com/*"
+      ],
+      "css": ["hide-media.css"]
     }
   ]
 }
