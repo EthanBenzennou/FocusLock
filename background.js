@@ -169,6 +169,13 @@ async function updateRules(whitelist, safeSearch) {
       throw error;
     }
   }
+
+  // Log successful application for debugging
+  try {
+    console.log("updateRules: applied", { entries: entries.length, safeSearch });
+  } catch (e) {
+    /* ignore logging errors */
+  }
 }
 
 async function loadAndApplyRules() {
@@ -232,9 +239,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     } else {
       chrome.alarms.clear("disable-safesearch-timer");
     }
-    updateRules(message.whitelist, message.safeSearch).then(() => {
-      sendResponse({ success: true });
-    });
+    (async () => {
+      try {
+        await updateRules(message.whitelist, message.safeSearch);
+        sendResponse({ success: true });
+      } catch (err) {
+        console.error("Failed to update rules:", err);
+        sendResponse({ success: false, error: String(err) });
+      }
+    })();
     return true;
   }
 
