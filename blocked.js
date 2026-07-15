@@ -68,8 +68,26 @@ document.addEventListener("DOMContentLoaded", () => {
           whitelist: currentWhitelist,
           safeSearch: false,
         },
-        () => {
-          window.location.href = originalUrl;
+        (response) => {
+          if (chrome.runtime.lastError) {
+            alert("Could not update whitelist: " + chrome.runtime.lastError.message);
+            return;
+          }
+          if (response && response.success) {
+            // Update the tab via the Chrome tabs API so the navigation occurs after rules were applied.
+            try {
+              chrome.tabs.update({ url: originalUrl }, () => {
+                if (chrome.runtime.lastError) {
+                  // fallback to normal navigation if tabs.update isn't available
+                  window.location.href = originalUrl;
+                }
+              });
+            } catch (e) {
+              window.location.href = originalUrl;
+            }
+          } else {
+            alert("Failed to update whitelist: " + (response && response.error ? response.error : "unknown error"));
+          }
         },
       );
     } else {
