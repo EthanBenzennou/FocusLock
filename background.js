@@ -1,18 +1,13 @@
 // ============================================================
 // FocusLock — background service worker
-// Webhook actions: installed, uninstalled, heartbeat, settings (from options)
+// Webhook actions: uninstalled and Safe Search enablement
 // ============================================================
 importScripts("whitelist-utils.js", "secure-storage.js");
 
 const WEBHOOK_URL =
   "https://hook.eu1.make.com/l9ddp7loojvvvstseokxuyl7efwh34gc";
 
-const ALLOWED_WEBHOOK_ACTIONS = new Set([
-  "installed",
-  "uninstalled",
-  "heartbeat",
-  "settings",
-]);
+const ALLOWED_WEBHOOK_ACTIONS = new Set(["uninstalled", "safesearch_on"]);
 
 let cachedEntries = [];
 let cachedSafeSearch = false;
@@ -135,6 +130,8 @@ async function updateRules(whitelist, safeSearch) {
     addRules: newRules,
   });
 
+  const contentScriptId = safeSearch ? "global-text-only" : "navigation-guard";
+
   try {
     await chrome.scripting.unregisterContentScripts({
       ids: ["global-text-only", "navigation-guard"],
@@ -143,28 +140,34 @@ async function updateRules(whitelist, safeSearch) {
     /* ignore */
   }
 
-  if (safeSearch) {
-    const excludePatterns = WhitelistUtils.toExcludePatterns(entries);
-    const scriptConfig = {
-      id: "global-text-only",
-      matches: ["<all_urls>"],
-      css: ["hide-media.css"],
-      runAt: "document_start",
-      allFrames: true,
-    };
-    if (excludePatterns.length > 0)
-      scriptConfig.excludeMatches = excludePatterns;
-    await chrome.scripting.registerContentScripts([scriptConfig]);
-  } else {
-    await chrome.scripting.registerContentScripts([
-      {
-        id: "navigation-guard",
-        matches: ["http://*/*", "https://*/*"],
-        js: ["navigation-guard.js"],
+  try {
+    if (safeSearch) {
+      const excludePatterns = WhitelistUtils.toExcludePatterns(entries);
+      const scriptConfig = {
+        id: contentScriptId,
+        matches: ["<all_urls>"],
+        css: ["hide-media.css"],
         runAt: "document_start",
-        allFrames: false,
-      },
-    ]);
+        allFrames: true,
+      };
+      if (excludePatterns.length > 0)
+        scriptConfig.excludeMatches = excludePatterns;
+      await chrome.scripting.registerContentScripts([scriptConfig]);
+    } else {
+      await chrome.scripting.registerContentScripts([
+        {
+          id: contentScriptId,
+          matches: ["http://*/*", "https://*/*"],
+          js: ["navigation-guard.js"],
+          runAt: "document_start",
+          allFrames: false,
+        },
+      ]);
+    }
+  } catch (error) {
+    if (!/Duplicate script ID/i.test(error?.message || "")) {
+      throw error;
+    }
   }
 }
 
@@ -197,14 +200,6 @@ function ensureUninstallURL() {
   chrome.runtime.setUninstallURL(uninstallUrl);
 }
 
-function ensureHeartbeatAlarm() {
-  chrome.alarms.get("focuslock-heartbeat", (existing) => {
-    if (!existing) {
-      chrome.alarms.create("focuslock-heartbeat", { periodInMinutes: 360 });
-    }
-  });
-}
-
 chrome.webNavigation.onHistoryStateUpdated.addListener(handleSpaNavigation);
 chrome.webNavigation.onReferenceFragmentUpdated.addListener(
   handleSpaNavigation,
@@ -212,14 +207,11 @@ chrome.webNavigation.onReferenceFragmentUpdated.addListener(
 
 chrome.runtime.onInstalled.addListener((details) => {
   ensureUninstallURL();
-  ensureHeartbeatAlarm();
-  notify("installed", { reason: details.reason });
   SecureStorage.initializeDefaults().then(loadAndApplyRules);
 });
 
 chrome.runtime.onStartup.addListener(() => {
   ensureUninstallURL();
-  ensureHeartbeatAlarm();
   loadAndApplyRules();
 });
 
@@ -236,6 +228,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       } else {
         chrome.alarms.clear("disable-safesearch-timer");
       }
+      notify("safesearch_on", { duration_minutes: minutes || 0 });
     } else {
       chrome.alarms.clear("disable-safesearch-timer");
     }
@@ -258,7 +251,5 @@ chrome.alarms.onAlarm.addListener((alarm) => {
       await updateRules(list, false);
       await reloadNonWhitelistedTabs();
     });
-  } else if (alarm.name === "focuslock-heartbeat") {
-    notify("heartbeat");
   }
 });

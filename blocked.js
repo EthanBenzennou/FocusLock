@@ -105,26 +105,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    const durationInput = prompt(
-      "Enter safe search duration (e.g. '20 mins', '1 hour'). Leave blank for infinite:",
-    );
-    if (durationInput === null) return;
-
-    const minutes = WhitelistUtils.parseDurationMinutes(durationInput) || 0;
-
-    const currentWhitelist = await SecureStorage.getWhitelist();
-    await chrome.storage.local.set({ safeSearch: true });
-
-    chrome.runtime.sendMessage(
-      {
-        type: "UPDATE_WHITELIST",
-        whitelist: currentWhitelist,
-        safeSearch: true,
-        safeSearchMinutes: minutes,
-      },
-      () => {
-        window.location.href = originalUrl;
-      },
-    );
+    const durationPageUrl = `${chrome.runtime.getURL("safe-search-duration.html")}?source=blocked&returnUrl=${encodeURIComponent(originalUrl)}`;
+    chrome.tabs.create({ url: durationPageUrl });
   });
 });

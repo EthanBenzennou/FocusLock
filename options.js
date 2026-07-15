@@ -1,28 +1,6 @@
 // ============================================================
 // FocusLock — options page
-// Webhook: only sends "settings" on save (no login/failure/granular events).
 // ============================================================
-const WEBHOOK_URL =
-  "https://hook.eu1.make.com/l9ddp7loojvvvstseokxuyl7efwh34gc";
-
-function sendSettingsWebhook(extraParams = {}) {
-  try {
-    const url = new URL(WEBHOOK_URL);
-    url.searchParams.set("action", "settings");
-    url.searchParams.set("ts", new Date().toISOString());
-    try {
-      url.searchParams.set("version", chrome.runtime.getManifest().version);
-    } catch (_) {}
-    for (const [k, v] of Object.entries(extraParams)) {
-      if (v !== undefined && v !== null && v !== "")
-        url.searchParams.set(k, String(v));
-    }
-    fetch(url.toString(), { mode: "no-cors" }).catch(() => {});
-  } catch (_) {
-    /* silent */
-  }
-}
-
 document.addEventListener("DOMContentLoaded", () => {
   const loginSection = document.getElementById("login-section");
   const settingsSection = document.getElementById("settings-section");
@@ -32,19 +10,33 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const whitelistInput = document.getElementById("whitelist-input");
   const safeSearchToggle = document.getElementById("safesearch-toggle");
-  const safeSearchDurationInput = document.getElementById(
-    "safesearch-duration",
+  const safeSearchDurationBtn = document.getElementById(
+    "safesearch-duration-btn",
   );
-  const safeSearchDurationBox = document.getElementById(
-    "safesearch-duration-box",
+  const safeSearchDurationHint = document.getElementById(
+    "safesearch-duration-hint",
   );
   const newPasswordInput = document.getElementById("new-password");
   const saveBtn = document.getElementById("save-btn");
 
   SecureStorage.initializeDefaults();
 
-  function updateSafeSearchDurationVisibility() {
-    safeSearchDurationBox.classList.toggle("hidden", !safeSearchToggle.checked);
+  async function updateSafeSearchDurationHint() {
+    const { safeSearchDurationMinutes, safeSearchDurationText } =
+      await chrome.storage.local.get([
+        "safeSearchDurationMinutes",
+        "safeSearchDurationText",
+      ]);
+    if (!safeSearchToggle.checked) {
+      safeSearchDurationHint.textContent = "";
+      return;
+    }
+
+    if (safeSearchDurationMinutes && safeSearchDurationMinutes > 0) {
+      safeSearchDurationHint.textContent = `Duration: ${safeSearchDurationText || `${safeSearchDurationMinutes} mins`}`;
+    } else {
+      safeSearchDurationHint.textContent = "Duration: set a time limit";
+    }
   }
 
   passwordInput.addEventListener("keydown", (e) => {
@@ -53,10 +45,13 @@ document.addEventListener("DOMContentLoaded", () => {
   newPasswordInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") saveBtn.click();
   });
-  safeSearchToggle.addEventListener(
-    "change",
-    updateSafeSearchDurationVisibility,
-  );
+  safeSearchToggle.addEventListener("change", () => {
+    updateSafeSearchDurationHint();
+  });
+  safeSearchDurationBtn.addEventListener("click", async () => {
+    const optionsUrl = chrome.runtime.getURL("safe-search-duration.html");
+    await chrome.tabs.create({ url: `${optionsUrl}?source=options` });
+  });
 
   loginBtn.addEventListener("click", async () => {
     const { passwordHash, passwordSalt } = await chrome.storage.local.get([
@@ -76,7 +71,7 @@ document.addEventListener("DOMContentLoaded", () => {
       loginError.classList.add("hidden");
       whitelistInput.value = whitelist.join("\n");
       safeSearchToggle.checked = !!safeSearch;
-      updateSafeSearchDurationVisibility();
+      await updateSafeSearchDurationHint();
     } else {
       loginError.classList.remove("hidden");
     }
@@ -91,8 +86,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let timeLimit = 0;
     if (isSafeSearchEnabled) {
-      const rawDuration = safeSearchDurationInput.value.trim();
-      timeLimit = WhitelistUtils.parseDurationMinutes(rawDuration) || 0;
+      const { safeSearchDurationMinutes } = await chrome.storage.local.get([
+        "safeSearchDurationMinutes",
+      ]);
+      timeLimit = safeSearchDurationMinutes || 0;
     }
 
     const prevWhitelist = await SecureStorage.getWhitelist();
@@ -119,14 +116,6 @@ document.addEventListener("DOMContentLoaded", () => {
       safeSearchMinutes: timeLimit,
     });
 
-    sendSettingsWebhook({
-      added_count: added.length,
-      removed_count: removed.length,
-      password_changed: passwordChanged,
-      safesearch_enabled: isSafeSearchEnabled,
-      whitelist_count: newWhitelist.length,
-    });
-
     settingsSection.classList.add("hidden");
     loginSection.classList.remove("hidden");
     passwordInput.value = "";
@@ -134,7 +123,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     alert(
       isSafeSearchEnabled
-        ? `Safe Search Mode active for ${timeLimit ? timeLimit + " mins" : "infinite"}.`
+        ? `Safe Search Mode active for ${timeLimit ? timeLimit + " mins" : "the selected duration"}.`
         : "Strict Firewall active. Settings locked.",
     );
   });

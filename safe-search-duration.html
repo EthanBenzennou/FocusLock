@@ -1,0 +1,117 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Safe Search Duration</title>
+    <style>
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #eef4ff 0%, #f8fbff 100%);
+        color: #111827;
+      }
+      .container {
+        width: min(92vw, 480px);
+        padding: 32px;
+        background: white;
+        border-radius: 16px;
+        box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
+      }
+      h1 {
+        margin: 0 0 10px;
+        font-size: 1.55rem;
+      }
+      .subtitle {
+        margin: 0 0 18px;
+        color: #4b5563;
+        line-height: 1.5;
+      }
+      .pill {
+        display: inline-block;
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: #1d4ed8;
+        background: #dbeafe;
+        margin-bottom: 16px;
+      }
+      input {
+        width: 100%;
+        padding: 12px 14px;
+        border: 1px solid #d1d5db;
+        border-radius: 10px;
+        box-sizing: border-box;
+        font-size: 1rem;
+        margin-bottom: 10px;
+      }
+      input:focus {
+        outline: none;
+        border-color: #2563eb;
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+      }
+      .hint {
+        font-size: 0.92rem;
+        color: #6b7280;
+        margin-bottom: 18px;
+      }
+      button {
+        width: 100%;
+        padding: 12px 16px;
+        border: none;
+        border-radius: 10px;
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+        color: white;
+        font-weight: 700;
+        cursor: pointer;
+        margin-top: 8px;
+      }
+      button:hover {
+        transform: translateY(-1px);
+      }
+      .secondary {
+        background: #e5e7eb;
+        color: #111827;
+      }
+      .secondary:hover {
+        background: #d1d5db;
+      }
+      .error {
+        color: #dc2626;
+        font-size: 0.9rem;
+        min-height: 1.2rem;
+        margin-bottom: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="pill">Temporary access</div>
+      <h1>Set Safe Search duration</h1>
+      <p class="subtitle">
+        Choose how long Safe Search should stay active before it turns off
+        again.
+      </p>
+      <input
+        id="duration-input"
+        type="text"
+        placeholder="e.g. 20 mins or 1 hour"
+        autocomplete="off"
+      />
+      <div class="error" id="duration-error"></div>
+      <p class="hint">
+        Use a specific amount of time such as 15 mins, 1 hour, or 2 hours.
+      </p>
+      <button id="apply-btn">Enable Safe Search</button>
+      <button id="cancel-btn" class="secondary">Cancel</button>
+    </div>
+    <script src="whitelist-utils.js"></script>
+    <script src="secure-storage.js"></script>
+    <script src="safe-search-duration.js"></script>
+  </body>
+</html>

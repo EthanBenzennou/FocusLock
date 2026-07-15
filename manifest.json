@@ -21,7 +21,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["blocked.html"],
+      "resources": ["blocked.html", "safe-search-duration.html"],
       "matches": ["<all_urls>"]
     }
   ],
