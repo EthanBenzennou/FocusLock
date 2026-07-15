@@ -6,9 +6,11 @@
   let checking = false;
 
   function redirectToBlocked() {
-    const blocked = chrome.runtime.getURL('blocked.html') +
-      '?domain=' + encodeURIComponent(location.hostname) +
-      '&url=' + encodeURIComponent(location.href);
+    const query = WhitelistUtils.buildBlockedPageQuery(
+      location.hostname,
+      location.href,
+    );
+    const blocked = `${chrome.runtime.getURL("blocked.html")}?${query}`;
     location.replace(blocked);
   }
 
@@ -17,11 +19,14 @@
     lastUrl = location.href;
     checking = true;
 
-    chrome.runtime.sendMessage({ type: 'CHECK_URL', url: location.href }, (response) => {
-      checking = false;
-      if (chrome.runtime.lastError) return;
-      if (response && !response.allowed) redirectToBlocked();
-    });
+    chrome.runtime.sendMessage(
+      { type: "CHECK_URL", url: location.href },
+      (response) => {
+        checking = false;
+        if (chrome.runtime.lastError) return;
+        if (response && !response.allowed) redirectToBlocked();
+      },
+    );
   }
 
   const originalPushState = history.pushState;
@@ -37,8 +42,8 @@
     checkCurrentUrl();
   };
 
-  window.addEventListener('popstate', checkCurrentUrl);
-  window.addEventListener('hashchange', checkCurrentUrl);
+  window.addEventListener("popstate", checkCurrentUrl);
+  window.addEventListener("hashchange", checkCurrentUrl);
 
   checkCurrentUrl();
 })();

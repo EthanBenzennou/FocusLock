@@ -3,7 +3,7 @@
 // worker decrypts via an install-bound key so rules still apply on browser restart.
 const SecureStorage = (() => {
   const PBKDF2_ITERATIONS = 310000;
-  const INSTALL_PEPPER = 'focuslock-vault-2026';
+  const INSTALL_PEPPER = "focuslock-vault-2026";
 
   function toB64(bytes) {
     return btoa(String.fromCharCode(...new Uint8Array(bytes)));
@@ -18,52 +18,54 @@ const SecureStorage = (() => {
 
   async function deriveKey(password, salt, usages) {
     const keyMaterial = await crypto.subtle.importKey(
-      'raw',
+      "raw",
       new TextEncoder().encode(password),
-      'PBKDF2',
+      "PBKDF2",
       false,
-      ['deriveKey']
+      ["deriveKey"],
     );
     return crypto.subtle.deriveKey(
-      { name: 'PBKDF2', salt, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
+      { name: "PBKDF2", salt, iterations: PBKDF2_ITERATIONS, hash: "SHA-256" },
       keyMaterial,
-      { name: 'AES-GCM', length: 256 },
+      { name: "AES-GCM", length: 256 },
       false,
-      usages
+      usages,
     );
   }
 
   async function deriveInstallKey() {
-    const salt = new TextEncoder().encode(chrome.runtime.id + ':' + INSTALL_PEPPER);
+    const salt = new TextEncoder().encode(
+      chrome.runtime.id + ":" + INSTALL_PEPPER,
+    );
     const keyMaterial = await crypto.subtle.importKey(
-      'raw',
+      "raw",
       new TextEncoder().encode(INSTALL_PEPPER + chrome.runtime.id),
-      'PBKDF2',
+      "PBKDF2",
       false,
-      ['deriveKey']
+      ["deriveKey"],
     );
     return crypto.subtle.deriveKey(
-      { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+      { name: "PBKDF2", salt, iterations: 100000, hash: "SHA-256" },
       keyMaterial,
-      { name: 'AES-GCM', length: 256 },
+      { name: "AES-GCM", length: 256 },
       false,
-      ['encrypt', 'decrypt']
+      ["encrypt", "decrypt"],
     );
   }
 
   async function hashPassword(password) {
     const salt = crypto.getRandomValues(new Uint8Array(16));
     const keyMaterial = await crypto.subtle.importKey(
-      'raw',
+      "raw",
       new TextEncoder().encode(password),
-      'PBKDF2',
+      "PBKDF2",
       false,
-      ['deriveBits']
+      ["deriveBits"],
     );
     const hash = await crypto.subtle.deriveBits(
-      { name: 'PBKDF2', salt, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
+      { name: "PBKDF2", salt, iterations: PBKDF2_ITERATIONS, hash: "SHA-256" },
       keyMaterial,
-      256
+      256,
     );
     return { hash: toB64(hash), salt: toB64(salt) };
   }
@@ -72,16 +74,16 @@ const SecureStorage = (() => {
     const salt = fromB64(saltB64);
     const expected = fromB64(hashB64);
     const keyMaterial = await crypto.subtle.importKey(
-      'raw',
+      "raw",
       new TextEncoder().encode(password),
-      'PBKDF2',
+      "PBKDF2",
       false,
-      ['deriveBits']
+      ["deriveBits"],
     );
     const actual = await crypto.subtle.deriveBits(
-      { name: 'PBKDF2', salt, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
+      { name: "PBKDF2", salt, iterations: PBKDF2_ITERATIONS, hash: "SHA-256" },
       keyMaterial,
-      256
+      256,
     );
     const a = new Uint8Array(actual);
     const b = expected;
@@ -97,21 +99,33 @@ const SecureStorage = (() => {
 
   async function encryptJSON(data, keyBytes) {
     const iv = crypto.getRandomValues(new Uint8Array(12));
-    const cryptoKey = await crypto.subtle.importKey('raw', keyBytes, 'AES-GCM', false, ['encrypt']);
+    const cryptoKey = await crypto.subtle.importKey(
+      "raw",
+      keyBytes,
+      "AES-GCM",
+      false,
+      ["encrypt"],
+    );
     const ciphertext = await crypto.subtle.encrypt(
-      { name: 'AES-GCM', iv },
+      { name: "AES-GCM", iv },
       cryptoKey,
-      new TextEncoder().encode(JSON.stringify(data))
+      new TextEncoder().encode(JSON.stringify(data)),
     );
     return { ciphertext: toB64(ciphertext), iv: toB64(iv) };
   }
 
   async function decryptJSON(ciphertextB64, ivB64, keyBytes) {
-    const cryptoKey = await crypto.subtle.importKey('raw', keyBytes, 'AES-GCM', false, ['decrypt']);
+    const cryptoKey = await crypto.subtle.importKey(
+      "raw",
+      keyBytes,
+      "AES-GCM",
+      false,
+      ["decrypt"],
+    );
     const plaintext = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: fromB64(ivB64) },
+      { name: "AES-GCM", iv: fromB64(ivB64) },
       cryptoKey,
-      fromB64(ciphertextB64)
+      fromB64(ciphertextB64),
     );
     return JSON.parse(new TextDecoder().decode(plaintext));
   }
@@ -119,35 +133,50 @@ const SecureStorage = (() => {
   async function wrapVaultKeyForInstall(vaultKey) {
     const installKey = await deriveInstallKey();
     const iv = crypto.getRandomValues(new Uint8Array(12));
-    const wrapped = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, installKey, vaultKey);
+    const wrapped = await crypto.subtle.encrypt(
+      { name: "AES-GCM", iv },
+      installKey,
+      vaultKey,
+    );
     await chrome.storage.local.set({
       vaultKeyInstallEnc: toB64(wrapped),
-      vaultKeyInstallIV: toB64(iv)
+      vaultKeyInstallIV: toB64(iv),
     });
   }
 
   async function unwrapVaultKeyFromInstall() {
-    const data = await chrome.storage.local.get(['vaultKeyInstallEnc', 'vaultKeyInstallIV']);
+    const data = await chrome.storage.local.get([
+      "vaultKeyInstallEnc",
+      "vaultKeyInstallIV",
+    ]);
     if (!data.vaultKeyInstallEnc || !data.vaultKeyInstallIV) return null;
     const installKey = await deriveInstallKey();
     const vaultKey = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: fromB64(data.vaultKeyInstallIV) },
+      { name: "AES-GCM", iv: fromB64(data.vaultKeyInstallIV) },
       installKey,
-      fromB64(data.vaultKeyInstallEnc)
+      fromB64(data.vaultKeyInstallEnc),
     );
     return new Uint8Array(vaultKey);
   }
 
   async function persistWhitelist(vaultKey, whitelist) {
     const { ciphertext, iv } = await encryptJSON(whitelist, vaultKey);
-    await chrome.storage.local.set({ whitelistEnc: ciphertext, whitelistIV: iv });
+    await chrome.storage.local.set({
+      whitelistEnc: ciphertext,
+      whitelistIV: iv,
+    });
   }
 
   async function getStored() {
     return chrome.storage.local.get([
-      'password', 'passwordHash', 'passwordSalt',
-      'whitelist', 'whitelistEnc', 'whitelistIV',
-      'vaultKeyInstallEnc', 'safeSearch'
+      "password",
+      "passwordHash",
+      "passwordSalt",
+      "whitelist",
+      "whitelistEnc",
+      "whitelistIV",
+      "vaultKeyInstallEnc",
+      "safeSearch",
     ]);
   }
 
@@ -156,16 +185,17 @@ const SecureStorage = (() => {
 
     if (data.passwordHash) {
       if (!data.whitelistEnc && data.whitelist) {
-        const vaultKey = (await unwrapVaultKeyFromInstall()) || (await generateVaultKey());
+        const vaultKey =
+          (await unwrapVaultKeyFromInstall()) || (await generateVaultKey());
         await persistWhitelist(vaultKey, data.whitelist);
         if (!data.vaultKeyInstallEnc) await wrapVaultKeyForInstall(vaultKey);
-        await chrome.storage.local.remove(['whitelist']);
+        await chrome.storage.local.remove(["whitelist"]);
       }
       return;
     }
 
-    const legacyPassword = data.password || 'admin';
-    const legacyWhitelist = data.whitelist || ['google.com'];
+    const legacyPassword = data.password || "admin";
+    const legacyWhitelist = data.whitelist || ["google.com"];
     const { hash, salt } = await hashPassword(legacyPassword);
     const vaultKey = await generateVaultKey();
 
@@ -174,23 +204,23 @@ const SecureStorage = (() => {
     await chrome.storage.local.set({
       passwordHash: hash,
       passwordSalt: salt,
-      safeSearch: data.safeSearch ?? false
+      safeSearch: data.safeSearch ?? false,
     });
-    await chrome.storage.local.remove(['password', 'whitelist']);
+    await chrome.storage.local.remove(["password", "whitelist"]);
   }
 
   async function initializeDefaults() {
     await migrateIfNeeded();
     const data = await getStored();
     if (!data.passwordHash) {
-      const { hash, salt } = await hashPassword('admin');
+      const { hash, salt } = await hashPassword("admin");
       const vaultKey = await generateVaultKey();
-      await persistWhitelist(vaultKey, ['google.com']);
+      await persistWhitelist(vaultKey, ["google.com"]);
       await wrapVaultKeyForInstall(vaultKey);
       await chrome.storage.local.set({
         passwordHash: hash,
         passwordSalt: salt,
-        safeSearch: false
+        safeSearch: false,
       });
     }
   }
@@ -225,6 +255,6 @@ const SecureStorage = (() => {
     verifyPassword,
     getWhitelist,
     saveWhitelist,
-    setPasswordHash
+    setPasswordHash,
   };
 })();

@@ -1,60 +1,94 @@
 // Shared whitelist parsing for FocusLock (domains + specific pages).
 const WhitelistUtils = (() => {
+  function buildBlockedPageQuery(domain, url) {
+    const params = new URLSearchParams();
+    if (domain) params.set("domain", domain);
+    if (url) params.set("url", url);
+    return params.toString();
+  }
+
+  function parseBlockedPageQuery(search) {
+    const params = new URLSearchParams(
+      search && search.startsWith("?") ? search.slice(1) : search || "",
+    );
+
+    const domain = (params.get("domain") || "").replace(/^www\./, "");
+    const url = params.get("url") || "";
+
+    return { domain, url };
+  }
+
   function parseEntry(item) {
     let trimmed = item.trim();
     if (!trimmed) return null;
 
     // FIX: Decode messy URL strings (e.g. copied from the blocked page) so Chrome can read them
     try {
-      if (trimmed.includes('%')) {
+      if (trimmed.includes("%")) {
         trimmed = decodeURIComponent(trimmed);
       }
-    } catch (e) { /* silent fail if it's not actually encoded */ }
+    } catch (e) {
+      /* silent fail if it's not actually encoded */
+    }
 
     let urlString = trimmed;
-    if (!/^https?:\/\//i.test(urlString)) urlString = 'https://' + urlString;
+    if (!/^https?:\/\//i.test(urlString)) urlString = "https://" + urlString;
 
     try {
       const url = new URL(urlString);
-      const domain = url.hostname.toLowerCase().replace(/^www\./, '');
+      const domain = url.hostname.toLowerCase().replace(/^www\./, "");
       const path = url.pathname + url.search + url.hash;
 
       if (!domain || !/^[a-z0-9.-]+$/.test(domain)) return null;
 
-      if (!path || path === '/') {
-        return { type: 'domain', domain, raw: trimmed, key: domain.toLowerCase() };
+      if (!path || path === "/") {
+        return {
+          type: "domain",
+          domain,
+          raw: trimmed,
+          key: domain.toLowerCase(),
+        };
       }
 
-      const normalizedPath = path.startsWith('/') ? path : '/' + path;
+      const normalizedPath = path.startsWith("/") ? path : "/" + path;
       return {
-        type: 'page',
+        type: "page",
         domain,
         path: normalizedPath,
         urlFilter: `||${domain}${normalizedPath}`,
         raw: trimmed,
-        key: `${domain.toLowerCase()}${normalizedPath.toLowerCase()}`
+        key: `${domain.toLowerCase()}${normalizedPath.toLowerCase()}`,
       };
     } catch (_) {
-      const slashIndex = trimmed.indexOf('/');
-      const domainPart = (slashIndex === -1 ? trimmed : trimmed.slice(0, slashIndex))
+      const slashIndex = trimmed.indexOf("/");
+      const domainPart = (
+        slashIndex === -1 ? trimmed : trimmed.slice(0, slashIndex)
+      )
         .toLowerCase()
-        .replace(/^www\./, '');
+        .replace(/^www\./, "");
 
       if (!/^[a-z0-9.-]+$/.test(domainPart)) return null;
 
       if (slashIndex === -1) {
-        return { type: 'domain', domain: domainPart, raw: trimmed, key: domainPart };
+        return {
+          type: "domain",
+          domain: domainPart,
+          raw: trimmed,
+          key: domainPart,
+        };
       }
 
       const pathPart = trimmed.slice(slashIndex);
-      const normalizedPath = pathPart.startsWith('/') ? pathPart : '/' + pathPart;
+      const normalizedPath = pathPart.startsWith("/")
+        ? pathPart
+        : "/" + pathPart;
       return {
-        type: 'page',
+        type: "page",
         domain: domainPart,
         path: normalizedPath,
         urlFilter: `||${domainPart}${normalizedPath}`,
         raw: trimmed,
-        key: `${domainPart}${normalizedPath.toLowerCase()}`
+        key: `${domainPart}${normalizedPath.toLowerCase()}`,
       };
     }
   }
@@ -75,8 +109,8 @@ const WhitelistUtils = (() => {
     try {
       const url = new URL(urlString);
       const path = url.pathname + url.search + url.hash;
-      if (!path || path === '/') return parseEntry(url.hostname);
-      return parseEntry(url.hostname.replace(/^www\./, '') + path);
+      if (!path || path === "/") return parseEntry(url.hostname);
+      return parseEntry(url.hostname.replace(/^www\./, "") + path);
     } catch (_) {
       return null;
     }
@@ -94,7 +128,7 @@ const WhitelistUtils = (() => {
   function toExcludePatterns(entries) {
     const patterns = [];
     for (const entry of entries) {
-      if (entry.type === 'domain') {
+      if (entry.type === "domain") {
         patterns.push(`*://${entry.domain}/*`);
         patterns.push(`*://*.${entry.domain}/*`);
       } else {
@@ -106,16 +140,19 @@ const WhitelistUtils = (() => {
   }
 
   function domainMatches(hostname, domain) {
-    const host = hostname.toLowerCase().replace(/^www\./, '');
-    return host === domain || host.endsWith('.' + domain);
+    const host = hostname.toLowerCase().replace(/^www\./, "");
+    return host === domain || host.endsWith("." + domain);
   }
 
   function pageMatches(url, entry) {
     const fullPath = (url.pathname + url.search + url.hash).toLowerCase();
     const entryPath = entry.path.toLowerCase();
     if (fullPath === entryPath) return true;
-    if (entryPath.includes('?')) return false;
-    return fullPath.startsWith(entryPath + '/') || fullPath.startsWith(entryPath + '?');
+    if (entryPath.includes("?")) return false;
+    return (
+      fullPath.startsWith(entryPath + "/") ||
+      fullPath.startsWith(entryPath + "?")
+    );
   }
 
   function isUrlAllowed(urlString, entries, options = {}) {
@@ -130,14 +167,19 @@ const WhitelistUtils = (() => {
 
     if (!/^https?:$/i.test(url.protocol)) return true;
 
-    const hostname = url.hostname.toLowerCase().replace(/^www\./, '');
+    const hostname = url.hostname.toLowerCase().replace(/^www\./, "");
 
     for (const entry of entries) {
-      if (entry.type === 'domain' && domainMatches(hostname, entry.domain)) return true;
+      if (entry.type === "domain" && domainMatches(hostname, entry.domain))
+        return true;
     }
 
     for (const entry of entries) {
-      if (entry.type === 'page' && domainMatches(hostname, entry.domain) && pageMatches(url, entry)) {
+      if (
+        entry.type === "page" &&
+        domainMatches(hostname, entry.domain) &&
+        pageMatches(url, entry)
+      ) {
         return true;
       }
     }
@@ -146,17 +188,33 @@ const WhitelistUtils = (() => {
   }
 
   function parseDurationMinutes(input) {
-    const text = String(input || '').trim().toLowerCase();
+    const text = String(input || "")
+      .trim()
+      .toLowerCase();
     if (!text) return null;
 
     const hourMatch = text.match(/^(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)\b/);
-    if (hourMatch) return Math.max(1, Math.round(parseFloat(hourMatch[1]) * 60));
+    if (hourMatch)
+      return Math.max(1, Math.round(parseFloat(hourMatch[1]) * 60));
 
-    const minuteMatch = text.match(/^(\d+(?:\.\d+)?)\s*(?:minutes?|mins?|m)?\b/);
+    const minuteMatch = text.match(
+      /^(\d+(?:\.\d+)?)\s*(?:minutes?|mins?|m)?\b/,
+    );
     if (minuteMatch) return Math.max(1, Math.round(parseFloat(minuteMatch[1])));
 
     return null;
   }
 
-  return { parseEntry, parseAll, pageEntryFromUrl, domainEntryFromUrl, toExcludePatterns, parseDurationMinutes, isUrlAllowed, domainMatches };
+  return {
+    buildBlockedPageQuery,
+    parseBlockedPageQuery,
+    parseEntry,
+    parseAll,
+    pageEntryFromUrl,
+    domainEntryFromUrl,
+    toExcludePatterns,
+    parseDurationMinutes,
+    isUrlAllowed,
+    domainMatches,
+  };
 })();
