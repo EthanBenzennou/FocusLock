@@ -37,11 +37,11 @@ const WhitelistUtils = (() => {
     try {
       const url = new URL(urlString);
       const domain = url.hostname.toLowerCase().replace(/^www\./, "");
-      const path = url.pathname + url.search + url.hash;
+      const pathWithoutHash = url.pathname + url.search;
 
       if (!domain || !/^[a-z0-9.-]+$/.test(domain)) return null;
 
-      if (!path || path === "/") {
+      if (!pathWithoutHash || pathWithoutHash === "/") {
         return {
           type: "domain",
           domain,
@@ -50,7 +50,9 @@ const WhitelistUtils = (() => {
         };
       }
 
-      const normalizedPath = path.startsWith("/") ? path : "/" + path;
+      const normalizedPath = pathWithoutHash.startsWith("/")
+        ? pathWithoutHash
+        : "/" + pathWithoutHash;
       return {
         type: "page",
         domain,
@@ -108,9 +110,9 @@ const WhitelistUtils = (() => {
   function pageEntryFromUrl(urlString) {
     try {
       const url = new URL(urlString);
-      const path = url.pathname + url.search + url.hash;
-      if (!path || path === "/") return parseEntry(url.hostname);
-      return parseEntry(url.hostname.replace(/^www\./, "") + path);
+      const pathWithoutHash = url.pathname + url.search;
+      if (!pathWithoutHash || pathWithoutHash === "/") return parseEntry(url.hostname);
+      return parseEntry(url.hostname.replace(/^www\./, "") + pathWithoutHash);
     } catch (_) {
       return null;
     }
@@ -145,7 +147,7 @@ const WhitelistUtils = (() => {
   }
 
   function pageMatches(url, entry) {
-    const fullPath = (url.pathname + url.search + url.hash).toLowerCase();
+    const fullPath = (url.pathname + url.search).toLowerCase();
     const entryPath = entry.path.toLowerCase();
     if (fullPath === entryPath) return true;
     if (entryPath.includes("?")) return false;

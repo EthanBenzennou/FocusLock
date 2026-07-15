@@ -11,6 +11,7 @@ const ALLOWED_WEBHOOK_ACTIONS = new Set(["uninstalled", "safesearch_on"]);
 
 let cachedEntries = [];
 let cachedSafeSearch = false;
+let initPromise = null;
 
 function buildWebhookUrl(action, extraParams = {}) {
   const url = new URL(WEBHOOK_URL);
@@ -125,10 +126,20 @@ async function updateRules(whitelist, safeSearch) {
     }
   });
 
-  await chrome.declarativeNetRequest.updateDynamicRules({
-    removeRuleIds: oldRuleIds,
-    addRules: newRules,
-  });
+  try {
+    await chrome.declarativeNetRequest.updateDynamicRules({
+      removeRuleIds: oldRuleIds,
+      addRules: newRules,
+    });
+  } catch (error) {
+    console.error("updateDynamicRules failed", {
+      error,
+      ruleCount: newRules.length,
+      oldRuleIds,
+      newRules,
+    });
+    throw error;
+  }
 
   const contentScriptId = safeSearch ? "global-text-only" : "navigation-guard";
 
@@ -169,21 +180,67 @@ async function updateRules(whitelist, safeSearch) {
       throw error;
     }
   }
+
+  // Log successful application for debugging
+  try {
+    console.log("updateRules: applied", {
+      entries: entries.length,
+      safeSearch,
+    });
+  } catch (e) {
+    /* ignore logging errors */
+  }
 }
 
 async function loadAndApplyRules() {
   await SecureStorage.migrateIfNeeded();
   const whitelist = await SecureStorage.getWhitelist();
   const { safeSearch } = await chrome.storage.local.get(["safeSearch"]);
+
+  console.log("loadAndApplyRules", {
+    whitelistLength: whitelist.length,
+    safeSearch: !!safeSearch,
+  });
+
+  if (!safeSearch) {
+    await chrome.alarms.clear("disable-safesearch-timer");
+  }
+
   await updateRules(
     whitelist.length ? whitelist : ["google.com", "github.com"],
     !!safeSearch,
   );
 }
 
+function startInitialization(forceReload = false) {
+  if (forceReload || !initPromise) {
+    initPromise = loadAndApplyRules().catch((error) => {
+      console.error("Failed to initialize rules on startup:", error);
+      initPromise = null;
+      throw error;
+    });
+  }
+  return initPromise;
+}
+
+function ensureInitialized() {
+  return initPromise ? initPromise : startInitialization();
+}
+
+async function ensureCacheReady() {
+  try {
+    await ensureInitialized();
+  } catch (error) {
+    console.error("ensureCacheReady init failed:", error);
+    const whitelist = await SecureStorage.getWhitelist();
+    await refreshCache(whitelist, cachedSafeSearch);
+  }
+}
+
 async function handleSpaNavigation(details) {
   if (details.frameId !== 0) return;
   if (cachedSafeSearch) return;
+  await ensureCacheReady();
   if (isAllowedUrl(details.url)) return;
 
   try {
@@ -200,19 +257,27 @@ function ensureUninstallURL() {
   chrome.runtime.setUninstallURL(uninstallUrl);
 }
 
-chrome.webNavigation.onHistoryStateUpdated.addListener(handleSpaNavigation);
-chrome.webNavigation.onReferenceFragmentUpdated.addListener(
-  handleSpaNavigation,
-);
+chrome.webNavigation.onHistoryStateUpdated.addListener((details) => {
+  ensureInitialized()
+    .then(() => handleSpaNavigation(details))
+    .catch((error) => console.error("Navigation guard init failed:", error));
+});
+chrome.webNavigation.onReferenceFragmentUpdated.addListener((details) => {
+  ensureInitialized()
+    .then(() => handleSpaNavigation(details))
+    .catch((error) => console.error("Navigation guard init failed:", error));
+});
 
 chrome.runtime.onInstalled.addListener((details) => {
+  console.log("background event: onInstalled", details);
   ensureUninstallURL();
-  SecureStorage.initializeDefaults().then(loadAndApplyRules);
+  SecureStorage.initializeDefaults().then(startInitialization);
 });
 
 chrome.runtime.onStartup.addListener(() => {
+  console.log("background event: onStartup");
   ensureUninstallURL();
-  loadAndApplyRules();
+  startInitialization();
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -232,24 +297,54 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     } else {
       chrome.alarms.clear("disable-safesearch-timer");
     }
-    updateRules(message.whitelist, message.safeSearch).then(() => {
-      sendResponse({ success: true });
-    });
+    (async () => {
+      try {
+        await ensureInitialized();
+        await updateRules(message.whitelist, message.safeSearch);
+        sendResponse({ success: true });
+      } catch (err) {
+        console.error("Failed to update rules:", err);
+        sendResponse({ success: false, error: String(err) });
+      }
+    })();
     return true;
   }
 
   if (message.type === "CHECK_URL") {
-    sendResponse({ allowed: isAllowedUrl(message.url) });
-    return false;
+    ensureInitialized()
+      .then(() => {
+        sendResponse({ allowed: isAllowedUrl(message.url) });
+      })
+      .catch((error) => {
+        console.error("CHECK_URL init failed:", error);
+        sendResponse({ allowed: false });
+      });
+    return true;
   }
 });
 
-chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === "disable-safesearch-timer") {
-    SecureStorage.getWhitelist().then(async (list) => {
-      await chrome.storage.local.set({ safeSearch: false });
-      await updateRules(list, false);
-      await reloadNonWhitelistedTabs();
-    });
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name !== "disable-safesearch-timer") return;
+
+  try {
+    const list = await SecureStorage.getWhitelist();
+    await chrome.storage.local.set({ safeSearch: false });
+    await updateRules(list, false);
+    await reloadNonWhitelistedTabs();
+  } catch (error) {
+    console.error("Alarm handler failed:", error);
   }
+});
+
+self.addEventListener("unhandledrejection", (event) => {
+  console.error("Unhandled promise rejection in background service worker:", event.reason);
+});
+
+self.addEventListener("error", (event) => {
+  console.error("Unhandled error in background service worker:", event.message, event.filename, event.lineno, event.colno, event.error);
+});
+
+// Ensure rules and cache are initialized whenever the service worker starts.
+startInitialization().catch((error) => {
+  console.error("Failed to initialize rules on startup:", error);
 });

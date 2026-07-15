@@ -35,4 +35,38 @@ if (
   throw new Error(`Unexpected parse result: ${JSON.stringify(result)}`);
 }
 
+const entries = context.WhitelistUtils.parseAll(["google.com"]);
+if (!entries.length || entries[0].type !== "domain") {
+  throw new Error(`Unexpected parseAll result: ${JSON.stringify(entries)}`);
+}
+
+if (
+  !context.WhitelistUtils.isUrlAllowed(
+    "https://mail.google.com/mail/u/0/#inbox",
+    entries,
+  )
+) {
+  throw new Error(
+    "Domain whitelist should allow subdomain URLs with hash fragments",
+  );
+}
+
+const pageEntries = context.WhitelistUtils.parseAll([
+  "https://mail.google.com/mail/u/0/#inbox",
+]);
+if (pageEntries.length !== 1 || pageEntries[0].type !== "page") {
+  throw new Error(
+    `Unexpected page entry parse result: ${JSON.stringify(pageEntries)}`,
+  );
+}
+
+if (
+  !context.WhitelistUtils.isUrlAllowed(
+    "https://mail.google.com/mail/u/0/#inbox",
+    pageEntries,
+  )
+) {
+  throw new Error("Page whitelist should allow the exact page URL");
+}
+
 console.log("url param parser regression test passed");

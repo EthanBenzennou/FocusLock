@@ -10,8 +10,16 @@
       location.hostname,
       location.href,
     );
-    const blocked = `${chrome.runtime.getURL("blocked.html")}?${query}`;
-    location.replace(blocked);
+    const runtime =
+      typeof chrome !== "undefined" && chrome.runtime
+        ? chrome.runtime
+        : typeof browser !== "undefined" && browser.runtime
+        ? browser.runtime
+        : null;
+    const blockedUrl = runtime
+      ? `${runtime.getURL("blocked.html")}?${query}`
+      : `blocked.html?${query}`;
+    location.replace(blockedUrl);
   }
 
   function checkCurrentUrl() {
@@ -19,11 +27,23 @@
     lastUrl = location.href;
     checking = true;
 
-    chrome.runtime.sendMessage(
+    const runtime =
+      typeof chrome !== "undefined" && chrome.runtime
+        ? chrome.runtime
+        : typeof browser !== "undefined" && browser.runtime
+        ? browser.runtime
+        : null;
+    if (!runtime || typeof runtime.sendMessage !== "function") {
+      console.error("Navigation guard: runtime.sendMessage unavailable");
+      checking = false;
+      return;
+    }
+
+    runtime.sendMessage(
       { type: "CHECK_URL", url: location.href },
       (response) => {
         checking = false;
-        if (chrome.runtime.lastError) return;
+        if (runtime.lastError) return;
         if (response && !response.allowed) redirectToBlocked();
       },
     );
