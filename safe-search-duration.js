@@ -35,15 +35,29 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     const currentWhitelist = await SecureStorage.getWhitelist();
-    chrome.runtime.sendMessage({
-      type: "UPDATE_WHITELIST",
-      whitelist: currentWhitelist,
-      safeSearch: true,
-      safeSearchMinutes: minutes,
+    const response = await new Promise((resolve) => {
+      chrome.runtime.sendMessage(
+        {
+          type: "UPDATE_WHITELIST",
+          whitelist: currentWhitelist,
+          safeSearch: true,
+          safeSearchMinutes: minutes,
+        },
+        resolve,
+      );
     });
 
+    if (!response || !response.success) {
+      errorEl.textContent =
+        "Unable to enable Safe Search mode. Please try again.";
+      return;
+    }
+
     if (source === "blocked" && returnUrl) {
-      window.location.href = decodeURIComponent(returnUrl);
+      const targetUrl = decodeURIComponent(returnUrl);
+      await new Promise((resolve) => {
+        chrome.tabs.update({ url: targetUrl }, () => resolve());
+      });
     } else {
       window.close();
     }

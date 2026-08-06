@@ -43,6 +43,17 @@ async function refreshCache(whitelist, safeSearch) {
   cachedSafeSearch = !!safeSearch;
 }
 
+async function updateSafeSearchTimer(minutes) {
+  if (minutes > 0) {
+    const expiresAt = Date.now() + minutes * 60 * 1000;
+    await chrome.storage.local.set({ safeSearchExpiresAt: expiresAt });
+    chrome.alarms.create("disable-safesearch-timer", { when: expiresAt });
+  } else {
+    await chrome.storage.local.remove(["safeSearchExpiresAt"]);
+    await chrome.alarms.clear("disable-safesearch-timer");
+  }
+}
+
 function isAllowedUrl(urlString) {
   return WhitelistUtils.isUrlAllowed(urlString, cachedEntries, {
     safeSearch: cachedSafeSearch,
@@ -195,20 +206,41 @@ async function updateRules(whitelist, safeSearch) {
 async function loadAndApplyRules() {
   await SecureStorage.migrateIfNeeded();
   const whitelist = await SecureStorage.getWhitelist();
-  const { safeSearch } = await chrome.storage.local.get(["safeSearch"]);
+  const { safeSearch, safeSearchExpiresAt } = await chrome.storage.local.get([
+    "safeSearch",
+    "safeSearchExpiresAt",
+  ]);
 
-  console.log("loadAndApplyRules", {
-    whitelistLength: whitelist.length,
-    safeSearch: !!safeSearch,
-  });
+  let activeSafeSearch = !!safeSearch;
+  const now = Date.now();
 
-  if (!safeSearch) {
+  if (activeSafeSearch && safeSearchExpiresAt) {
+    const expiresAt = Number(safeSearchExpiresAt);
+    if (Number.isFinite(expiresAt)) {
+      if (now >= expiresAt) {
+        activeSafeSearch = false;
+        await chrome.storage.local.set({ safeSearch: false });
+        await chrome.storage.local.remove(["safeSearchExpiresAt"]);
+        await chrome.alarms.clear("disable-safesearch-timer");
+      } else {
+        chrome.alarms.create("disable-safesearch-timer", { when: expiresAt });
+      }
+    }
+  }
+
+  if (!activeSafeSearch) {
+    await chrome.storage.local.remove(["safeSearchExpiresAt"]);
     await chrome.alarms.clear("disable-safesearch-timer");
   }
 
+  console.log("loadAndApplyRules", {
+    whitelistLength: whitelist.length,
+    safeSearch: activeSafeSearch,
+  });
+
   await updateRules(
     whitelist.length ? whitelist : ["google.com", "github.com"],
-    !!safeSearch,
+    activeSafeSearch,
   );
 }
 
@@ -277,28 +309,28 @@ chrome.runtime.onInstalled.addListener((details) => {
 chrome.runtime.onStartup.addListener(() => {
   console.log("background event: onStartup");
   ensureUninstallURL();
-  startInitialization();
+  (async () => {
+    await chrome.storage.local.set({ safeSearch: false });
+    await chrome.storage.local.remove(["safeSearchExpiresAt"]);
+    startInitialization(true);
+  })();
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "UPDATE_WHITELIST") {
-    if (message.safeSearch) {
-      const minutes = message.safeSearchMinutes
-        ? Math.max(1, Math.round(message.safeSearchMinutes))
-        : 0;
-      if (minutes > 0) {
-        chrome.alarms.create("disable-safesearch-timer", {
-          delayInMinutes: minutes,
-        });
-      } else {
-        chrome.alarms.clear("disable-safesearch-timer");
-      }
-      notify("safesearch_on", { duration_minutes: minutes || 0 });
-    } else {
-      chrome.alarms.clear("disable-safesearch-timer");
-    }
     (async () => {
       try {
+        if (message.safeSearch) {
+          const minutes = message.safeSearchMinutes
+            ? Math.max(1, Math.round(message.safeSearchMinutes))
+            : 0;
+          await updateSafeSearchTimer(minutes);
+          notify("safesearch_on", { duration_minutes: minutes || 0 });
+        } else {
+          await chrome.storage.local.remove(["safeSearchExpiresAt"]);
+          await chrome.alarms.clear("disable-safesearch-timer");
+        }
+
         await ensureInitialized();
         await updateRules(message.whitelist, message.safeSearch);
         sendResponse({ success: true });
@@ -329,6 +361,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   try {
     const list = await SecureStorage.getWhitelist();
     await chrome.storage.local.set({ safeSearch: false });
+    await chrome.storage.local.remove(["safeSearchExpiresAt"]);
     await updateRules(list, false);
     await reloadNonWhitelistedTabs();
   } catch (error) {
@@ -337,11 +370,21 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 });
 
 self.addEventListener("unhandledrejection", (event) => {
-  console.error("Unhandled promise rejection in background service worker:", event.reason);
+  console.error(
+    "Unhandled promise rejection in background service worker:",
+    event.reason,
+  );
 });
 
 self.addEventListener("error", (event) => {
-  console.error("Unhandled error in background service worker:", event.message, event.filename, event.lineno, event.colno, event.error);
+  console.error(
+    "Unhandled error in background service worker:",
+    event.message,
+    event.filename,
+    event.lineno,
+    event.colno,
+    event.error,
+  );
 });
 
 // Ensure rules and cache are initialized whenever the service worker starts.

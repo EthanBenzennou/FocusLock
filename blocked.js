@@ -129,6 +129,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const durationPageUrl = `${chrome.runtime.getURL("safe-search-duration.html")}?source=blocked&returnUrl=${encodeURIComponent(originalUrl)}`;
-    chrome.tabs.create({ url: durationPageUrl });
+    window.location.href = durationPageUrl;
   });
 });
