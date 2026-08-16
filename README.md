@@ -32,11 +32,13 @@ From the blocked page you can choose:
 - Password prompts use hidden input (dots), not plain browser `prompt()` dialogs.
 
 ### Safe Search mode
-- Temporarily unblocks the web but strips images, videos, and GIFs globally.
-- Whitelisted sites are excluded from media blocking.
-- Duration is customizable when enabling from the blocked page (e.g. `5 minutes`, `10 mins`, `1 hour`).
-- Automatically turns off when the timer expires.
-- When Safe Search ends, all **non-whitelisted** tabs are reloaded so temporarily opened pages get blocked again. Whitelisted tabs stay open.
+ - Temporarily unblocks the web but strips images, videos, and GIFs globally.
+ - Whitelisted sites are excluded from media blocking.
+ - Duration is customizable when enabling from the blocked page or via the Options page (e.g. `5 minutes`, `10 mins`, `1 hour`).
+ - Enabling Safe Search from the blocked interstitial: clicking "Enable Safe Search" prompts for your password (browser `prompt()`), then opens the duration dialog; after confirming the duration the original tab is refreshed with Safe Search active.
+ - Extending Safe Search from the page header or Options page follows the same flow: password prompt, duration dialog, then the page is refreshed with the updated Safe Search timer.
+ - A live countdown header is displayed at the top of every page while Safe Search is active, showing remaining time and offering an "Extend" button.
+ - Safe Search automatically turns off when the timer expires; the extension reloads non-whitelisted tabs so they return to the blocked interstitial.
 
 ### SPA / client-side navigation protection
 Sites like YouTube change the URL without a full page load (via `pushState`). FocusLock watches for these in-page navigations and blocks the new URL if it is not whitelisted — even when only a specific page (not the whole domain) was allowed.

@@ -16,6 +16,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const safeSearchDurationHint = document.getElementById(
     "safesearch-duration-hint",
   );
+  const safeSearchRemaining = document.getElementById("safesearch-remaining");
+  const safeSearchExtendBtn = document.getElementById("safesearch-extend-btn");
   const newPasswordInput = document.getElementById("new-password");
   const saveBtn = document.getElementById("save-btn");
 
@@ -39,6 +41,53 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  let remainingInterval = null;
+
+  function formatRemaining(ms) {
+    if (ms <= 0) return "0s";
+    const total = Math.floor(ms / 1000);
+    const hours = Math.floor(total / 3600);
+    const mins = Math.floor((total % 3600) / 60);
+    const secs = total % 60;
+    if (hours > 0) return `${hours}h ${mins}m ${secs}s`;
+    if (mins > 0) return `${mins}m ${secs}s`;
+    return `${secs}s`;
+  }
+
+  async function updateRemainingInSettings() {
+    try {
+      const { safeSearch, safeSearchExpiresAt } = await chrome.storage.local.get([
+        "safeSearch",
+        "safeSearchExpiresAt",
+      ]);
+      if (!safeSearch || !safeSearchExpiresAt) {
+        safeSearchRemaining.textContent = "Remaining: —";
+        return;
+      }
+      const remaining = Number(safeSearchExpiresAt) - Date.now();
+      if (remaining <= 0) {
+        safeSearchRemaining.textContent = "Remaining: 0s";
+        return;
+      }
+      safeSearchRemaining.textContent = `Remaining: ${formatRemaining(remaining)}`;
+    } catch (err) {
+      safeSearchRemaining.textContent = "Remaining: —";
+    }
+  }
+
+  function startRemainingUpdater() {
+    if (remainingInterval) clearInterval(remainingInterval);
+    updateRemainingInSettings();
+    remainingInterval = setInterval(updateRemainingInSettings, 1000);
+  }
+
+  function stopRemainingUpdater() {
+    if (remainingInterval) {
+      clearInterval(remainingInterval);
+      remainingInterval = null;
+    }
+  }
+
   passwordInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") loginBtn.click();
   });
@@ -47,8 +96,14 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   safeSearchToggle.addEventListener("change", () => {
     updateSafeSearchDurationHint();
+    startRemainingUpdater();
   });
   safeSearchDurationBtn.addEventListener("click", async () => {
+    const optionsUrl = chrome.runtime.getURL("safe-search-duration.html");
+    await chrome.tabs.create({ url: `${optionsUrl}?source=options` });
+  });
+
+  safeSearchExtendBtn.addEventListener("click", async () => {
     const optionsUrl = chrome.runtime.getURL("safe-search-duration.html");
     await chrome.tabs.create({ url: `${optionsUrl}?source=options` });
   });
@@ -72,6 +127,7 @@ document.addEventListener("DOMContentLoaded", () => {
       whitelistInput.value = whitelist.join("\n");
       safeSearchToggle.checked = !!safeSearch;
       await updateSafeSearchDurationHint();
+      startRemainingUpdater();
     } else {
       loginError.classList.remove("hidden");
     }
@@ -120,6 +176,8 @@ document.addEventListener("DOMContentLoaded", () => {
     loginSection.classList.remove("hidden");
     passwordInput.value = "";
     newPasswordInput.value = "";
+
+    stopRemainingUpdater();
 
     alert(
       isSafeSearchEnabled

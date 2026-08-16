@@ -169,6 +169,7 @@ async function updateRules(whitelist, safeSearch) {
         id: contentScriptId,
         matches: ["<all_urls>"],
         css: ["hide-media.css"],
+        js: ["safe-search-inject.js"],
         runAt: "document_start",
         allFrames: true,
       };
@@ -317,6 +318,38 @@ chrome.runtime.onStartup.addListener(() => {
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === "VERIFY_PASSWORD") {
+    (async () => {
+      try {
+        const { passwordHash, passwordSalt } = await chrome.storage.local.get([
+          "passwordHash",
+          "passwordSalt",
+        ]);
+        const ok = await SecureStorage.verifyPassword(
+          message.password,
+          passwordHash,
+          passwordSalt,
+        );
+        sendResponse({ ok: !!ok });
+      } catch (err) {
+        sendResponse({ ok: false, error: String(err) });
+      }
+    })();
+    return true;
+  }
+
+  if (message.type === "OPEN_DURATION_PAGE") {
+    (async () => {
+      try {
+        await chrome.tabs.create({ url: message.url });
+        sendResponse({ ok: true });
+      } catch (err) {
+        sendResponse({ ok: false, error: String(err) });
+      }
+    })();
+    return true;
+  }
+
   if (message.type === "UPDATE_WHITELIST") {
     (async () => {
       try {

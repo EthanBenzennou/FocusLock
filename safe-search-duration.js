@@ -53,11 +53,28 @@ document.addEventListener("DOMContentLoaded", async () => {
       return;
     }
 
-    if (source === "blocked" && returnUrl) {
+    if (returnUrl) {
       const targetUrl = decodeURIComponent(returnUrl);
-      await new Promise((resolve) => {
-        chrome.tabs.update({ url: targetUrl }, () => resolve());
-      });
+      try {
+        const tabs = await chrome.tabs.query({});
+        const match = tabs.find((t) => t.url && t.url.startsWith(targetUrl));
+        if (match && match.id) {
+          await new Promise((resolve) => {
+            chrome.tabs.update(match.id, { url: targetUrl }, () => resolve());
+          });
+        } else {
+          // fallback: try to update active tab to the target url
+          await new Promise((resolve) => {
+            chrome.tabs.update({ url: targetUrl }, () => resolve());
+          });
+        }
+      } catch (e) {
+        try {
+          chrome.tabs.update({ url: targetUrl });
+        } catch (_) {
+          window.location.href = targetUrl;
+        }
+      }
     } else {
       window.close();
     }
