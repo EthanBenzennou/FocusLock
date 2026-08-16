@@ -1,123 +1,149 @@
-# FocusLock Whitelist
+# FocusLock
 
-A Chrome extension that blocks the entire web by default and only allows sites you explicitly whitelist. Settings are locked behind a password, with optional Safe Search mode for temporary, text-only browsing.
+FocusLock is a Chrome extension that protects browsing by default with a strict whitelist, while offering a temporary Safe Search mode for text-only browsing when needed. It is designed for users who want a strong default block posture without losing access to some parts of the web during a limited session.
 
-**Version:** 1.3  
-**Manifest:** V3
+**Manifest:** V3  
+**Type:** Chrome extension
 
 ---
 
-## Features
+## What the project does
 
 ### Strict whitelist firewall
-- Every website is blocked unless it is on your whitelist.
-- Blocked visits show a FocusLock interstitial with options to unlock or enable Safe Search.
-- Rules are enforced with Chrome's `declarativeNetRequest` API.
+- Every site is blocked unless it is explicitly allowed in the whitelist.
+- Blocked requests are redirected to a custom interstitial page.
+- The extension uses Chrome `declarativeNetRequest` to enforce the firewall at the browser level.
+- SPA navigation and hash-based URL changes are also watched so disallowed client-side navigation does not bypass the firewall.
 
-### Domain and page-level whitelisting
-You can allow an entire site or a single page:
+### Domain and page-level whitelist entries
+The extension supports both:
+- Whole domains, such as `github.com`
+- Specific pages, such as `stackoverflow.com/questions/12345`
 
-| Type | Example | What it allows |
-|------|---------|----------------|
-| Whole domain | `github.com` | All pages on `github.com` |
-| Specific page | `stackoverflow.com/questions/12345` | Only that exact URL path |
+This allows you to allow either an entire site or just a single page as needed.
 
-From the blocked page you can choose:
-- **Whitelist Whole Domain**
-- **Whitelist This Page Only**
-
-### Password-protected settings
-- Options are locked until you enter the correct password.
-- Default password on first install: `admin` (change it immediately).
-- Password prompts use hidden input (dots), not plain browser `prompt()` dialogs.
+### Password-protected configuration
+- Settings are locked behind a password.
+- The default password is `admin`, but it should be changed immediately after first setup.
+- Passwords are hashed with PBKDF2-SHA256 and stored with a salt.
+- Whitelist entries are encrypted before being saved to `chrome.storage.local`.
 
 ### Safe Search mode
- - Temporarily unblocks the web but strips images, videos, and GIFs globally.
- - Whitelisted sites are excluded from media blocking.
- - Duration is customizable when enabling from the blocked page or via the Options page (e.g. `5 minutes`, `10 mins`, `1 hour`).
- - Enabling Safe Search from the blocked interstitial: clicking "Enable Safe Search" prompts for your password (browser `prompt()`), then opens the duration dialog; after confirming the duration the original tab is refreshed with Safe Search active.
- - Extending Safe Search from the page header or Options page follows the same flow: password prompt, duration dialog, then the page is refreshed with the updated Safe Search timer.
- - A live countdown header is displayed at the top of every page while Safe Search is active, showing remaining time and offering an "Extend" button.
- - Safe Search automatically turns off when the timer expires; the extension reloads non-whitelisted tabs so they return to the blocked interstitial.
+Safe Search temporarily removes the traffic limit by presenting a text-only browsing session instead of full browsing.
 
-### SPA / client-side navigation protection
-Sites like YouTube change the URL without a full page load (via `pushState`). FocusLock watches for these in-page navigations and blocks the new URL if it is not whitelisted — even when only a specific page (not the whole domain) was allowed.
+Features include:
+- Temporary unblocking of the web while stripping images, videos, and GIFs globally
+- Whitelisted sites excluded from media blocking
+- User-selectable durations such as `15 mins`, `1 hour`, or `2 hours`
+- A duration page that supports two modes:
+  - Fresh session mode: starts a new Safe Search session
+  - Extend session mode: adds time to the current Safe Search session
+- A live timer header shown at the top of active pages
+- Extend and Stop controls in the timer header
+- Auto-expiration when the timer ends
 
-### Secure storage
-Sensitive data is not stored in plaintext:
-- **Password:** PBKDF2-SHA256 hash with salt (310,000 iterations)
-- **Whitelist:** AES-256-GCM encrypted at rest
+The extension also keeps the current page in sync with refresh behavior:
+- enabling Safe Search from the blocked page returns to the original tab and refreshes it
+- extending Safe Search from the page timer stays on the same tab and refreshes it instead of opening a new tab
+- stopping Safe Search behaves the same way as an automatic timeout, disabling the session and reloading the page
 
-Legacy plaintext values are migrated automatically on first load after updating.
+### Automatic expiry and recovery flow
+When a Safe Search session expires:
+- the timer is cleared
+- Safe Search is disabled in storage
+- the dynamic rules are re-applied
+- non-whitelisted tabs are reloaded so they return to the blocked interstitial when appropriate
 
-### Make.com webhook integration
-The extension sends GET requests to a Make.com webhook for monitoring:
+---
 
-| Action | When |
-|--------|------|
-| `installed` | Extension installed or updated |
-| `uninstalled` | Extension removed |
-| `heartbeat` | Every 6 hours |
-| `settings` | Settings saved from the options page |
+## Main project files
 
-Configure the webhook URL in `background.js` and `options.js`.
+- `background.js` — service worker, rule management, timer lifecycle, Safe Search expiry handling, and message routing
+- `blocked.html` / `blocked.js` — blocked-page UI and actions to whitelist or enter Safe Search
+- `safe-search-duration.html` / `safe-search-duration.js` — duration prompt for starting or extending a Safe Search session
+- `safe-search-inject.js` — injected page header with timer, Extend, and Stop controls
+- `options.html` / `options.js` — settings UI, login flow, whitelist editing, and Safe Search controls
+- `secure-storage.js` — encrypted storage layer and password management
+- `whitelist-utils.js` — parsing and matching logic for whitelist entries and duration strings
+- `manifest.json` — Chrome extension manifest
+- `tests/` — regression tests covering parsing and Safe Search flows
 
 ---
 
 ## Installation
 
-1. Open Chrome and go to `chrome://extensions`
-2. Enable **Developer mode** (top right)
-3. Click **Load unpacked**
-4. Select the `FocusLock` folder
-5. Click the extension icon → **FocusLock Settings** to configure
+1. Open Chrome and go to `chrome://extensions`.
+2. Enable Developer mode.
+3. Click Load unpacked.
+4. Select the FocusLock folder.
+5. Open the extension options page and sign in with the default password `admin`.
+6. Change the password and save your whitelist settings.
 
 ---
 
 ## Usage
 
-### Open settings
+### Open the settings UI
 - Click the extension icon in the toolbar, or
-- Go to `chrome://extensions` → FocusLock → **Details** → **Extension options**
+- Go to `chrome://extensions` and open FocusLock details to access the options page.
 
-### Manage whitelist
-Enter one entry per line in the settings textarea:
+### Add sites to the whitelist
+Put one entry per line in the whitelist field:
 
-```
+```text
 github.com
 google.com
 wikipedia.org/wiki/Focus
 news.ycombinator.com/item?id=12345
 ```
 
-Click **Save Settings & Lock** when done.
-
 ### When a site is blocked
-You'll see the FocusLock blocked page with three actions:
+The blocked page lets the user choose:
+1. Whitelist Whole Domain
+2. Whitelist This Page Only
+3. Enable Safe Search Mode
 
-1. **Whitelist Whole Domain** — permanently allow the entire site (requires password)
-2. **Whitelist This Page Only** — permanently allow only the current URL (requires password)
-3. **Enable Safe Search Mode** — temporary text-only browsing for a duration you specify (requires password)
+### Safe Search flow
+From the blocked page or the options panel:
+- choose a duration
+- confirm the password when prompted
+- the extension updates the timer and refreshes the active page as needed
+- the timer header shows the remaining time and offers Extend and Stop actions
+
+### Stop Safe Search
+Use the Stop button in the timer header to immediately deactivate Safe Search. This triggers the same cleanup and refresh flow as a natural timer expiry.
 
 ---
 
-## How it works
+## Security model
 
+FocusLock keeps sensitive data protected by design:
+- password hashes are PBKDF2-derived with a per-user salt
+- whitelist data is encrypted with AES-GCM before being stored
+- legacy plaintext values are migrated automatically when needed
+- the extension keeps the secure storage and rule logic in the background worker so enforcement remains reliable across browser restarts
+
+---
+
+## Testing
+
+The repository includes regression tests for:
+- whitelist URL parsing and blocked-page query handling
+- Safe Search injection behavior
+- mode-specific duration-page wording and session handling
+
+Run the test suite from the project root:
+
+```bash
+node tests/url-param-parser.test.js && node tests/safe-search-inject.test.js && node tests/safe-search-duration-mode.test.js
 ```
-┌─────────────┐     blocked request      ┌──────────────────┐
-│   Browser   │ ───────────────────────► │   blocked.html   │
-└─────────────┘                          └────────┬─────────┘
-       ▲                                          │
-       │ allow / redirect                         │ password + whitelist update
-       │                                          ▼
-┌──────┴──────┐     dynamic rules         ┌──────────────────┐
-│  Any site   │ ◄──────────────────────── │  background.js   │
-└─────────────┘                           └──────────────────┘
-                                                    │
-                                                    ▼
-                                           chrome.storage.local
-                                           (encrypted whitelist,
-                                            hashed password)
+
+---
+
+## Notes
+
+This project is intentionally opinionated: it defaults to locking the web down and only allows temporary exceptions when the user explicitly chooses them. The Safe Search session is designed to protect the user from distraction without permanently opening the entire internet.
+
 ```
 
 ### Blocking modes
