@@ -1,5 +1,6 @@
 (function () {
   const HEADER_ID = "focuslock-timer-header";
+  const SPACER_ID = "focuslock-timer-header-spacer";
   const HEADER_HEIGHT = 42;
 
   function formatRemaining(ms) {
@@ -16,13 +17,23 @@
   function createHeader() {
     if (document.getElementById(HEADER_ID)) return;
 
+    const body = document.body;
+    const spacer = document.createElement("div");
+    spacer.id = SPACER_ID;
+    spacer.style.display = "block";
+    spacer.style.width = "100%";
+    spacer.style.height = `${HEADER_HEIGHT}px`;
+    spacer.style.pointerEvents = "none";
+
     const header = document.createElement("div");
     header.id = HEADER_ID;
     header.style.position = "fixed";
     header.style.top = "0";
     header.style.left = "0";
     header.style.right = "0";
+    header.style.width = "100%";
     header.style.height = `${HEADER_HEIGHT}px`;
+    header.style.boxSizing = "border-box";
     header.style.display = "flex";
     header.style.alignItems = "center";
     header.style.justifyContent = "space-between";
@@ -33,6 +44,11 @@
     header.style.fontFamily = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
     header.style.fontSize = "13px";
     header.style.boxShadow = "0 2px 6px rgba(0,0,0,0.2)";
+
+    if (body) {
+      body.insertBefore(spacer, body.firstChild || null);
+      body.insertBefore(header, spacer.nextSibling || null);
+    }
 
     const left = document.createElement("div");
     left.style.display = "flex";
@@ -123,12 +139,19 @@
     header.appendChild(left);
     header.appendChild(right);
 
-    document.documentElement.appendChild(header);
+    if (body) {
+      body.insertBefore(header, body.firstChild || null);
+    } else {
+      document.documentElement.appendChild(header);
+    }
   }
 
   function removeHeader() {
     const el = document.getElementById(HEADER_ID);
     if (el && el.parentNode) el.parentNode.removeChild(el);
+
+    const spacer = document.body && document.body.querySelector ? document.body.querySelector('[style*="height: 42px"]') : null;
+    if (spacer && spacer.parentNode) spacer.parentNode.removeChild(spacer);
   }
 
   async function updateHeader() {
