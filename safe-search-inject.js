@@ -70,21 +70,34 @@
       try {
         const pwd = prompt("Enter password to extend Safe Search:");
         if (pwd === null) return;
-        // verify password via background
         chrome.runtime.sendMessage({ type: "VERIFY_PASSWORD", password: pwd }, (resp) => {
           if (!resp || !resp.ok) {
             alert("Incorrect password.");
             return;
           }
           const url = chrome.runtime.getURL("safe-search-duration.html") + "?source=page&returnUrl=" + encodeURIComponent(location.href);
-          // ask background to open the duration page so we can operate with tabs API there
-          chrome.runtime.sendMessage({ type: "OPEN_DURATION_PAGE", url });
+          chrome.runtime.sendMessage({ type: "OPEN_DURATION_PAGE", url, replaceCurrent: true });
         });
       } catch (err) {
         try {
           chrome.runtime.openOptionsPage();
         } catch (e) {}
       }
+    });
+
+    const stopBtn = document.createElement("button");
+    stopBtn.textContent = "Stop";
+    stopBtn.style.background = "#dc2626";
+    stopBtn.style.color = "white";
+    stopBtn.style.border = "none";
+    stopBtn.style.padding = "6px 10px";
+    stopBtn.style.borderRadius = "4px";
+    stopBtn.style.cursor = "pointer";
+    stopBtn.style.fontSize = "12px";
+
+    stopBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      chrome.runtime.sendMessage({ type: "STOP_SAFESEARCH" });
     });
 
     const closeBtn = document.createElement("button");
@@ -104,6 +117,7 @@
     });
 
     right.appendChild(extendBtn);
+    right.appendChild(stopBtn);
     right.appendChild(closeBtn);
 
     header.appendChild(left);

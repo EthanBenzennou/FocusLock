@@ -6,8 +6,8 @@ const code = fs.readFileSync(path.join(__dirname, '..', 'safe-search-inject.js')
 
 const context = {
   console,
-  setInterval,
-  clearInterval,
+  setInterval: () => 1,
+  clearInterval: () => {},
   Date,
   Number,
   encodeURIComponent,

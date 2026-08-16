@@ -5,11 +5,41 @@ document.addEventListener("DOMContentLoaded", async () => {
   const durationInput = document.getElementById("duration-input");
   const applyBtn = document.getElementById("apply-btn");
   const cancelBtn = document.getElementById("cancel-btn");
+  const modePill = document.getElementById("mode-pill");
+  const modeTitle = document.getElementById("mode-title");
+  const modeSubtitle = document.getElementById("mode-subtitle");
 
   const stored = await chrome.storage.local.get([
+    "safeSearch",
+    "safeSearchExpiresAt",
     "safeSearchDurationMinutes",
     "safeSearchDurationText",
   ]);
+
+  const isExtendMode = source === "page" || !!stored.safeSearch;
+  const mode = isExtendMode ? "extend" : "fresh";
+  const modeConfig = {
+    fresh: {
+      pill: "Fresh session",
+      title: "Start a fresh Safe Search session",
+      subtitle:
+        "Choose how long Safe Search should stay active before it turns off again.",
+      button: "Enable Safe Search",
+    },
+    extend: {
+      pill: "Extend session",
+      title: "Extend the current Safe Search session",
+      subtitle:
+        "Choose how much time to add to the current Safe Search session.",
+      button: "Extend Safe Search",
+    },
+  };
+
+  if (modePill) modePill.textContent = modeConfig[mode].pill;
+  if (modeTitle) modeTitle.textContent = modeConfig[mode].title;
+  if (modeSubtitle) modeSubtitle.textContent = modeConfig[mode].subtitle;
+  applyBtn.textContent = modeConfig[mode].button;
+
   if (stored.safeSearchDurationText) {
     durationInput.value = stored.safeSearchDurationText;
   }
@@ -27,9 +57,16 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     errorEl.textContent = "";
     const textValue = rawValue;
+    const now = Date.now();
+    const currentExpiry = Number(stored.safeSearchExpiresAt) || 0;
+    const nextExpiry =
+      mode === "extend" && currentExpiry > now
+        ? currentExpiry + minutes * 60 * 1000
+        : now + minutes * 60 * 1000;
 
     await chrome.storage.local.set({
       safeSearch: true,
+      safeSearchExpiresAt: nextExpiry,
       safeSearchDurationMinutes: minutes,
       safeSearchDurationText: textValue,
     });
@@ -42,6 +79,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           whitelist: currentWhitelist,
           safeSearch: true,
           safeSearchMinutes: minutes,
+          safeSearchExpiresAt: nextExpiry,
         },
         resolve,
       );
@@ -49,7 +87,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     if (!response || !response.success) {
       errorEl.textContent =
-        "Unable to enable Safe Search mode. Please try again.";
+        mode === "extend"
+          ? "Unable to extend Safe Search mode. Please try again."
+          : "Unable to enable Safe Search mode. Please try again.";
       return;
     }
 
@@ -63,7 +103,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             chrome.tabs.update(match.id, { url: targetUrl }, () => resolve());
           });
         } else {
-          // fallback: try to update active tab to the target url
           await new Promise((resolve) => {
             chrome.tabs.update({ url: targetUrl }, () => resolve());
           });

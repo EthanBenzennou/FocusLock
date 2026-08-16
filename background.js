@@ -43,9 +43,12 @@ async function refreshCache(whitelist, safeSearch) {
   cachedSafeSearch = !!safeSearch;
 }
 
-async function updateSafeSearchTimer(minutes) {
+async function updateSafeSearchTimer(minutes, expiresAtOverride = null) {
   if (minutes > 0) {
-    const expiresAt = Date.now() + minutes * 60 * 1000;
+    const expiresAt =
+      Number.isFinite(expiresAtOverride) && expiresAtOverride > Date.now()
+        ? Number(expiresAtOverride)
+        : Date.now() + minutes * 60 * 1000;
     await chrome.storage.local.set({ safeSearchExpiresAt: expiresAt });
     chrome.alarms.create("disable-safesearch-timer", { when: expiresAt });
   } else {
@@ -86,6 +89,25 @@ async function reloadNonWhitelistedTabs() {
       /* tab may have closed */
     }
   }
+}
+
+async function disableSafeSearchAndRefresh(tabId = null) {
+  const list = await SecureStorage.getWhitelist();
+  await chrome.storage.local.set({ safeSearch: false });
+  await chrome.storage.local.remove(["safeSearchExpiresAt"]);
+  await chrome.alarms.clear("disable-safesearch-timer");
+  await updateRules(list, false);
+
+  if (tabId) {
+    try {
+      await chrome.tabs.reload(tabId);
+    } catch (_) {
+      /* tab may have closed */
+    }
+    return;
+  }
+
+  await reloadNonWhitelistedTabs();
 }
 
 async function updateRules(whitelist, safeSearch) {
@@ -341,10 +363,29 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "OPEN_DURATION_PAGE") {
     (async () => {
       try {
-        await chrome.tabs.create({ url: message.url });
+        const targetTabId = message.tabId ?? sender?.tab?.id;
+        if (message.replaceCurrent && targetTabId) {
+          await chrome.tabs.update(targetTabId, { url: message.url });
+        } else {
+          await chrome.tabs.create({ url: message.url });
+        }
         sendResponse({ ok: true });
       } catch (err) {
         sendResponse({ ok: false, error: String(err) });
+      }
+    })();
+    return true;
+  }
+
+  if (message.type === "STOP_SAFESEARCH") {
+    (async () => {
+      try {
+        const currentTabId = message.tabId ?? sender?.tab?.id;
+        await disableSafeSearchAndRefresh(currentTabId ?? null);
+        sendResponse({ success: true });
+      } catch (err) {
+        console.error("Failed to stop Safe Search:", err);
+        sendResponse({ success: false, error: String(err) });
       }
     })();
     return true;
@@ -357,7 +398,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           const minutes = message.safeSearchMinutes
             ? Math.max(1, Math.round(message.safeSearchMinutes))
             : 0;
-          await updateSafeSearchTimer(minutes);
+          const expiresAt = Number(message.safeSearchExpiresAt);
+          if (Number.isFinite(expiresAt) && expiresAt > Date.now()) {
+            await updateSafeSearchTimer(minutes, expiresAt);
+          } else {
+            await updateSafeSearchTimer(minutes);
+          }
           notify("safesearch_on", { duration_minutes: minutes || 0 });
         } else {
           await chrome.storage.local.remove(["safeSearchExpiresAt"]);
@@ -392,11 +438,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name !== "disable-safesearch-timer") return;
 
   try {
-    const list = await SecureStorage.getWhitelist();
-    await chrome.storage.local.set({ safeSearch: false });
-    await chrome.storage.local.remove(["safeSearchExpiresAt"]);
-    await updateRules(list, false);
-    await reloadNonWhitelistedTabs();
+    await disableSafeSearchAndRefresh();
   } catch (error) {
     console.error("Alarm handler failed:", error);
   }
