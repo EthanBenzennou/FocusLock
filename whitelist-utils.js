@@ -1,5 +1,7 @@
 // Shared whitelist parsing for FocusLock (domains + specific pages).
 const WhitelistUtils = (() => {
+  const DEFAULT_SAFE_SEARCH_DURATION_MINUTES = 60;
+
   function buildBlockedPageQuery(domain, url) {
     const params = new URLSearchParams();
     if (domain) params.set("domain", domain);
@@ -208,6 +210,7 @@ const WhitelistUtils = (() => {
   }
 
   return {
+    DEFAULT_SAFE_SEARCH_DURATION_MINUTES,
     buildBlockedPageQuery,
     parseBlockedPageQuery,
     parseEntry,
