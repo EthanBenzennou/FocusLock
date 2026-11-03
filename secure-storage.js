@@ -223,6 +223,18 @@ const SecureStorage = (() => {
         safeSearch: false,
       });
     }
+
+    const { safeSearchDefaultDurationMinutes } =
+      await chrome.storage.local.get(["safeSearchDefaultDurationMinutes"]);
+    if (
+      !Number.isInteger(safeSearchDefaultDurationMinutes) ||
+      safeSearchDefaultDurationMinutes <= 0
+    ) {
+      await chrome.storage.local.set({
+        safeSearchDefaultDurationMinutes:
+          WhitelistUtils.DEFAULT_SAFE_SEARCH_DURATION_MINUTES,
+      });
+    }
   }
 
   async function getWhitelist() {

@@ -34,10 +34,8 @@ Safe Search temporarily removes the traffic limit by presenting a text-only brow
 Features include:
 - Temporary unblocking of the web while stripping images, videos, and GIFs globally
 - Whitelisted sites excluded from media blocking
-- User-selectable durations such as `15 mins`, `1 hour`, or `2 hours`
-- A duration page that supports two modes:
-  - Fresh session mode: starts a new Safe Search session
-  - Extend session mode: adds time to the current Safe Search session
+- A configurable default duration of 60 minutes for new sessions
+- A duration page for adding a user-selected amount of time when extending a session
 - A live timer header shown at the top of active pages
 - Extend and Stop controls in the timer header
 - Auto-expiration when the timer ends
@@ -105,10 +103,13 @@ The blocked page lets the user choose:
 
 ### Safe Search flow
 From the blocked page or the options panel:
-- choose a duration
 - confirm the password when prompted
+- Safe Search starts for the configured default duration (60 minutes by default)
 - the extension updates the timer and refreshes the active page as needed
 - the timer header shows the remaining time and offers Extend and Stop actions
+
+Change the default duration in the password-protected settings. Duration selection
+is shown only when extending an active Safe Search session.
 
 ### Stop Safe Search
 Use the Stop button in the timer header to immediately deactivate Safe Search. This triggers the same cleanup and refresh flow as a natural timer expiry.
@@ -130,12 +131,13 @@ FocusLock keeps sensitive data protected by design:
 The repository includes regression tests for:
 - whitelist URL parsing and blocked-page query handling
 - Safe Search injection behavior
+- blocked-page activation with the configured default duration
 - mode-specific duration-page wording and session handling
 
 Run the test suite from the project root:
 
 ```bash
-node tests/url-param-parser.test.js && node tests/safe-search-inject.test.js && node tests/safe-search-duration-mode.test.js
+node tests/url-param-parser.test.js && node tests/safe-search-inject.test.js && node tests/safe-search-duration-mode.test.js && node tests/blocked-search-mode-activation.test.js && node tests/options-search-duration.test.js
 ```
 
 ---

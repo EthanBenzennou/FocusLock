@@ -118,12 +118,24 @@
             </div>
           </label>
           <div class="duration-box">
-            <button id="safesearch-duration-btn" type="button">
-              Set Safe Search Duration
-            </button>
-            <p id="safesearch-duration-hint">Choose a duration.</p>
+            <label for="safesearch-default-duration">
+              Default Safe Search duration (minutes)
+            </label>
+            <input
+              id="safesearch-default-duration"
+              type="number"
+              min="1"
+              step="1"
+              value="60"
+            />
+            <p id="safesearch-duration-error" class="error hidden">
+              Enter a whole number of minutes greater than zero.
+            </p>
+            <p id="safesearch-duration-hint">Default duration: 60 mins</p>
             <p id="safesearch-remaining">Remaining: —</p>
-            <button id="safesearch-extend-btn" type="button">Extend Safe Search</button>
+            <button id="safesearch-extend-btn" type="button">
+              Extend Safe Search
+            </button>
           </div>
         </div>
         <p><strong>Change Password:</strong></p>

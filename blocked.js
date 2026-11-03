@@ -128,7 +128,46 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    const durationPageUrl = `${chrome.runtime.getURL("safe-search-duration.html")}?source=blocked&returnUrl=${encodeURIComponent(originalUrl)}`;
-    window.location.href = durationPageUrl;
+    const { safeSearchDefaultDurationMinutes } =
+      await chrome.storage.local.get(["safeSearchDefaultDurationMinutes"]);
+    const minutes =
+      Number.isInteger(safeSearchDefaultDurationMinutes) &&
+      safeSearchDefaultDurationMinutes > 0
+        ? safeSearchDefaultDurationMinutes
+        : WhitelistUtils.DEFAULT_SAFE_SEARCH_DURATION_MINUTES;
+    const expiresAt = Date.now() + minutes * 60 * 1000;
+    const durationText = `${minutes} min${minutes === 1 ? "" : "s"}`;
+    const targetUrl = originalUrl || resolvedUrl;
+
+    await chrome.storage.local.set({
+      safeSearch: true,
+      safeSearchExpiresAt: expiresAt,
+      safeSearchDurationMinutes: minutes,
+      safeSearchDurationText: durationText,
+    });
+
+    chrome.runtime.sendMessage(
+      {
+        type: "UPDATE_WHITELIST",
+        whitelist: await SecureStorage.getWhitelist(),
+        safeSearch: true,
+        safeSearchMinutes: minutes,
+        safeSearchExpiresAt: expiresAt,
+      },
+      (response) => {
+        if (chrome.runtime.lastError || !response || !response.success) {
+          alert("Unable to enable Safe Search mode. Please try again.");
+          return;
+        }
+
+        try {
+          chrome.tabs.update({ url: targetUrl }, () => {
+            if (chrome.runtime.lastError) window.location.href = targetUrl;
+          });
+        } catch (e) {
+          window.location.href = targetUrl;
+        }
+      },
+    );
   });
 });
