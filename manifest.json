@@ -24,11 +24,5 @@
       "resources": ["blocked.html", "safe-search-duration.html"],
       "matches": ["<all_urls>"]
     }
-  ],
-  "content_scripts": [
-    {
-      "matches": ["*://www.google.com/*", "*://google.com/*"],
-      "css": ["hide-media.css"]
-    }
   ]
 }

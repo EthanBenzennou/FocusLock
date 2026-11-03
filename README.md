@@ -33,7 +33,7 @@ Safe Search temporarily removes the traffic limit by presenting a text-only brow
 
 Features include:
 - Temporary unblocking of the web while stripping images, videos, and GIFs globally
-- Whitelisted sites excluded from media blocking
+- Whitelisted pages and all of their embedded frames are excluded from media blocking
 - A configurable default duration of 60 minutes for new sessions
 - A duration page for adding a user-selected amount of time when extending a session
 - A live timer header shown at the top of active pages
@@ -131,13 +131,14 @@ FocusLock keeps sensitive data protected by design:
 The repository includes regression tests for:
 - whitelist URL parsing and blocked-page query handling
 - Safe Search injection behavior
+- per-frame media filtering, whitelist exemptions, and reported media elements
 - blocked-page activation with the configured default duration
 - mode-specific duration-page wording and session handling
 
 Run the test suite from the project root:
 
 ```bash
-node tests/url-param-parser.test.js && node tests/safe-search-inject.test.js && node tests/safe-search-duration-mode.test.js && node tests/blocked-search-mode-activation.test.js && node tests/options-search-duration.test.js
+node tests/url-param-parser.test.js && node tests/safe-search-inject.test.js && node tests/safe-search-media.test.js && node tests/safe-search-duration-mode.test.js && node tests/blocked-search-mode-activation.test.js && node tests/options-search-duration.test.js
 ```
 
 ---
@@ -154,7 +155,7 @@ This project is intentionally opinionated: it defaults to locking the web down a
 A catch-all redirect rule sends non-whitelisted pages to `blocked.html`. Whitelist entries create higher-priority allow rules.
 
 **Safe Search**  
-The redirect rule is removed. A global content script injects `hide-media.css` to hide media, except on whitelisted domains/pages.
+The redirect rule is removed. A global content script applies `hide-media.css` per frame, except when the top-level page is whitelisted; in that case, its embedded frames are unfiltered too.
 
 ---
 

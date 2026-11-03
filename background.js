@@ -186,17 +186,13 @@ async function updateRules(whitelist, safeSearch) {
 
   try {
     if (safeSearch) {
-      const excludePatterns = WhitelistUtils.toExcludePatterns(entries);
       const scriptConfig = {
         id: contentScriptId,
         matches: ["<all_urls>"],
-        css: ["hide-media.css"],
         js: ["safe-search-inject.js"],
         runAt: "document_start",
         allFrames: true,
       };
-      if (excludePatterns.length > 0)
-        scriptConfig.excludeMatches = excludePatterns;
       await chrome.scripting.registerContentScripts([scriptConfig]);
     } else {
       await chrome.scripting.registerContentScripts([
@@ -386,6 +382,43 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       } catch (err) {
         console.error("Failed to stop Safe Search:", err);
         sendResponse({ success: false, error: String(err) });
+      }
+    })();
+    return true;
+  }
+
+  if (message.type === "APPLY_SAFESEARCH_FILTER") {
+    (async () => {
+      try {
+        await ensureInitialized();
+        const tabId = sender?.tab?.id;
+        const frameId = sender?.frameId;
+        const topLevelUrl = sender?.tab?.url;
+        if (
+          !Number.isInteger(tabId) ||
+          !Number.isInteger(frameId) ||
+          !topLevelUrl
+        ) {
+          throw new Error("Safe Search filter requires a tab and frame URL");
+        }
+
+        const target = { tabId, frameIds: [frameId] };
+        if (WhitelistUtils.isUrlAllowed(topLevelUrl, cachedEntries)) {
+          await chrome.scripting.removeCSS({
+            target,
+            files: ["hide-media.css"],
+          });
+          sendResponse({ success: true, filtered: false });
+        } else {
+          await chrome.scripting.insertCSS({
+            target,
+            files: ["hide-media.css"],
+          });
+          sendResponse({ success: true, filtered: true });
+        }
+      } catch (error) {
+        console.error("Failed to apply Safe Search media filter:", error);
+        sendResponse({ success: false, error: String(error) });
       }
     })();
     return true;
