@@ -5,6 +5,7 @@ const vm = require('vm');
 const code = fs.readFileSync(path.join(__dirname, '..', 'safe-search-inject.js'), 'utf8');
 
 (async () => {
+  let filterRequest;
   const context = {
     console,
     setInterval: () => 1,
@@ -16,7 +17,13 @@ const code = fs.readFileSync(path.join(__dirname, '..', 'safe-search-inject.js')
   };
 
   context.chrome = {
-    runtime: { getURL: (p) => p },
+    runtime: {
+      getURL: (p) => p,
+      sendMessage: (message, callback) => {
+        filterRequest = message;
+        callback({ success: true });
+      },
+    },
     storage: {
       local: {
         get: () => Promise.resolve({ safeSearch: true, safeSearchExpiresAt: Date.now() + 60 * 1000 }),
@@ -82,6 +89,9 @@ const code = fs.readFileSync(path.join(__dirname, '..', 'safe-search-inject.js')
 
     if (spacerEntry.node.id !== 'focuslock-timer-header-spacer') {
       throw new Error('Expected the spacer to be inserted before the page content.');
+    }
+    if (filterRequest?.type !== 'APPLY_SAFESEARCH_FILTER') {
+      throw new Error('Expected Safe Search to request per-frame media filtering.');
     }
 
     console.log('safe-search-inject VM smoke test passed');

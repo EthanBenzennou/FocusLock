@@ -3,6 +3,23 @@
   const SPACER_ID = "focuslock-timer-header-spacer";
   const HEADER_HEIGHT = 42;
 
+  chrome.runtime.sendMessage(
+    { type: "APPLY_SAFESEARCH_FILTER" },
+    (response) => {
+      if (chrome.runtime.lastError) {
+        console.error(
+          "Failed to request Safe Search media filtering:",
+          chrome.runtime.lastError.message,
+        );
+      } else if (!response?.success) {
+        console.error(
+          "Failed to apply Safe Search media filtering:",
+          response?.error || "Unknown error",
+        );
+      }
+    },
+  );
+
   function formatRemaining(ms) {
     if (ms <= 0) return "0s";
     const totalSeconds = Math.floor(ms / 1000);

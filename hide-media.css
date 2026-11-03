@@ -22,7 +22,7 @@ audio,
 picture,
 object,
 embed,
-canvas:not([class*="rc-" i]):not([class*="captcha" i]):not([id*="captcha" i]), /* Canvas is often used to draw captcha puzzles */
+canvas:not([class*="rc-" i]):not([class*="captcha" i]):not([id*="captcha" i]):not([class*="signature" i]):not([id*="signature" i]), /* Preserve captcha and signature canvases */
 source {
   display: none !important;
   visibility: hidden !important;
@@ -36,15 +36,28 @@ source {
   z-index: -9999 !important;
 }
 
+form-signature-pad canvas.signatureCanvas,
+canvas.signatureCanvas,
+canvas[id^="signatureCanvas-"] {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  max-width: none !important;
+  max-height: none !important;
+  pointer-events: auto !important;
+}
+
 /* Target elements explicitly designated with image/video roles */
 div[role="img"],
 div[role="video"],
+div.ob-rec-rtb-image,
 g-img {
   display: none !important;
 }
 
 span[role="img"],
 div[role="video"],
+div.ob-rec-rtb-image,
 g-img {
   display: none !important;
 }
