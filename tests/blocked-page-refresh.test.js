@@ -6,8 +6,9 @@ const code = fs.readFileSync(
   path.join(__dirname, "..", "blocked.js"),
   "utf8",
 );
+const retryState = new Map();
 
-async function runScenario(safeSearch) {
+async function runScenario(navigationType) {
   const handlers = new Map();
   const elements = new Map();
   let replacement;
@@ -35,6 +36,15 @@ async function runScenario(safeSearch) {
     console,
     URL,
     URLSearchParams,
+    Date,
+    performance: {
+      getEntriesByType: () => [{ type: navigationType }],
+    },
+    sessionStorage: {
+      getItem: (key) => retryState.get(key) || null,
+      setItem: (key, value) => retryState.set(key, value),
+      removeItem: (key) => retryState.delete(key),
+    },
     window: {
       location: {
         search: "?domain=example.com&url=https%3A%2F%2Fexample.com%2Fpage",
@@ -52,7 +62,7 @@ async function runScenario(safeSearch) {
     chrome: {
       storage: {
         local: {
-          get: async () => ({ safeSearch }),
+          get: async () => ({ safeSearch: false }),
         },
       },
     },
@@ -72,17 +82,22 @@ async function runScenario(safeSearch) {
 }
 
 (async () => {
-  const active = await runScenario(true);
-  if (active.replacement !== "https://example.com/page") {
-    throw new Error("Refreshing a blocked page should retry its URL in Safe Search");
+  const initialLoad = await runScenario("navigate");
+  if (initialLoad.replacement) {
+    throw new Error("An initial blocked-page load should remain blocked");
   }
 
-  const inactive = await runScenario(false);
-  if (inactive.replacement) {
-    throw new Error("A blocked page should remain visible when Safe Search is off");
+  const refresh = await runScenario("reload");
+  if (refresh.replacement !== "https://example.com/page") {
+    throw new Error("Refreshing a blocked page should retry its original URL");
   }
-  if (!inactive.handlers.has("safesearch-btn:click")) {
-    throw new Error("The blocked-page actions should remain available when blocked");
+
+  const redirectedBackToBlockPage = await runScenario("reload");
+  if (redirectedBackToBlockPage.replacement) {
+    throw new Error("A strict-mode retry should not loop on the blocking page");
+  }
+  if (!redirectedBackToBlockPage.handlers.has("safesearch-btn:click")) {
+    throw new Error("The blocked-page actions should remain available");
   }
 
   console.log("blocked-page refresh tests passed");

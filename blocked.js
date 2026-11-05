@@ -7,16 +7,52 @@ document.addEventListener("DOMContentLoaded", async () => {
   let pagePath = "";
   let resolvedUrl = originalUrl || `https://${domain}`;
 
-  const { safeSearch } = await chrome.storage.local.get(["safeSearch"]);
-  if (safeSearch) {
+  let targetUrl;
+  try {
+    targetUrl = new URL(resolvedUrl);
+  } catch (e) {
+    // Keep the blocked page visible when its target URL is invalid.
+  }
+
+  const retryKey = "focuslockBlockedPageRefreshRetry";
+  let retryPending = false;
+  try {
+    const retry = JSON.parse(sessionStorage.getItem(retryKey) || "null");
+    retryPending =
+      retry?.url === targetUrl?.href &&
+      Date.now() - retry.timestamp >= 0 &&
+      Date.now() - retry.timestamp < 10000;
+    sessionStorage.removeItem(retryKey);
+  } catch (e) {
+    // Keep the blocked page available if session storage cannot be accessed.
+  }
+
+  let navigationType;
+  try {
+    navigationType = performance.getEntriesByType("navigation")[0]?.type;
+  } catch (e) {
+    // Older browsers may not expose navigation timing entries.
+  }
+  if (
+    navigationType === "reload" &&
+    !retryPending &&
+    targetUrl &&
+    (targetUrl.protocol === "http:" || targetUrl.protocol === "https:")
+  ) {
     try {
-      const targetUrl = new URL(resolvedUrl);
-      if (targetUrl.protocol === "http:" || targetUrl.protocol === "https:") {
-        window.location.replace(targetUrl.href);
-        return;
-      }
+      sessionStorage.setItem(
+        retryKey,
+        JSON.stringify({ url: targetUrl.href, timestamp: Date.now() }),
+      );
+      window.location.replace(targetUrl.href);
+      return;
     } catch (e) {
-      // Keep the blocked page visible when its target URL is invalid.
+      // Keep the blocked page visible if retry state cannot be saved.
+      try {
+        sessionStorage.removeItem(retryKey);
+      } catch (storageError) {
+        // Ignore unavailable session storage.
+      }
     }
   }
 
