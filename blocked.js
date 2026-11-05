@@ -1,4 +1,4 @@
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   const { domain, url: originalUrl } = WhitelistUtils.parseBlockedPageQuery(
     window.location.search,
   );
@@ -6,6 +6,19 @@ document.addEventListener("DOMContentLoaded", () => {
   let displayDomain = domain || "";
   let pagePath = "";
   let resolvedUrl = originalUrl || `https://${domain}`;
+
+  const { safeSearch } = await chrome.storage.local.get(["safeSearch"]);
+  if (safeSearch) {
+    try {
+      const targetUrl = new URL(resolvedUrl);
+      if (targetUrl.protocol === "http:" || targetUrl.protocol === "https:") {
+        window.location.replace(targetUrl.href);
+        return;
+      }
+    } catch (e) {
+      // Keep the blocked page visible when its target URL is invalid.
+    }
+  }
 
   try {
     const u = new URL(resolvedUrl);
