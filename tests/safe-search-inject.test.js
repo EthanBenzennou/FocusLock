@@ -6,6 +6,7 @@ const code = fs.readFileSync(path.join(__dirname, '..', 'safe-search-inject.js')
 
 (async () => {
   let filterRequest;
+  const observers = [];
   const context = {
     console,
     setInterval: () => 1,
@@ -14,6 +15,17 @@ const code = fs.readFileSync(path.join(__dirname, '..', 'safe-search-inject.js')
     Number,
     encodeURIComponent,
     decodeURIComponent,
+    MutationObserver: class {
+      constructor(callback) {
+        this.callback = callback;
+        this.targets = [];
+        observers.push(this);
+      }
+
+      observe(target, options) {
+        this.targets.push({ target, options });
+      }
+    },
   };
 
   context.chrome = {
@@ -21,7 +33,7 @@ const code = fs.readFileSync(path.join(__dirname, '..', 'safe-search-inject.js')
       getURL: (p) => p,
       sendMessage: (message, callback) => {
         filterRequest = message;
-        callback({ success: true });
+        callback({ success: true, filtered: true });
       },
     },
     storage: {
@@ -34,6 +46,24 @@ const code = fs.readFileSync(path.join(__dirname, '..', 'safe-search-inject.js')
 
   const created = [];
   const bodyChildren = [];
+  function createShadowRoot(children = []) {
+    const styles = [];
+    return {
+      nodeType: 11,
+      children,
+      styles,
+      querySelectorAll: () => children,
+      getElementById: (id) => styles.find((style) => style.id === id) || null,
+      appendChild: (style) => styles.push(style),
+    };
+  }
+
+  const existingShadowRoot = createShadowRoot();
+  const existingHost = {
+    nodeType: 1,
+    shadowRoot: existingShadowRoot,
+    querySelectorAll: () => [],
+  };
   const body = {
     style: {},
     firstChild: null,
@@ -45,9 +75,11 @@ const code = fs.readFileSync(path.join(__dirname, '..', 'safe-search-inject.js')
     },
   };
   context.document = {
+    nodeType: 9,
     body,
     documentElement: { style: {}, appendChild: () => {} },
     getElementById: () => null,
+    querySelectorAll: () => [existingHost],
     createElement: (tag) => {
       const el = {
         tagName: tag,
@@ -92,6 +124,63 @@ const code = fs.readFileSync(path.join(__dirname, '..', 'safe-search-inject.js')
     }
     if (filterRequest?.type !== 'APPLY_SAFESEARCH_FILTER') {
       throw new Error('Expected Safe Search to request per-frame media filtering.');
+    }
+
+    const outbrainStyle = existingShadowRoot.getElementById(
+      'focuslock-outbrain-image-filter',
+    );
+    if (
+      !outbrainStyle ||
+      !outbrainStyle.textContent.includes('images.outbrainimg.com') ||
+      !outbrainStyle.textContent.includes('display: none !important')
+    ) {
+      throw new Error('Expected Outbrain images in existing open shadow roots to be hidden.');
+    }
+    const sourcePrefixes = Array.from(
+      outbrainStyle.textContent.matchAll(/src\^="([^"]+)"/g),
+      ([, prefix]) => prefix.toLowerCase(),
+    );
+    const matchesOutbrainImage = (src) =>
+      sourcePrefixes.some((prefix) => src.toLowerCase().startsWith(prefix));
+    if (
+      !matchesOutbrainImage('https://images.outbrainimg.com/transform/v3/example-a.webp') ||
+      !matchesOutbrainImage('https://images.outbrainimg.com/transform/v3/example-b.webp') ||
+      !matchesOutbrainImage('//images.outbrainimg.com/transform/v3/example-c.webp') ||
+      matchesOutbrainImage('https://example.com/transform/v3/example.webp')
+    ) {
+      throw new Error('Expected only Outbrain image URL forms to match the shadow-root filter.');
+    }
+
+    const addedShadowRoot = createShadowRoot();
+    const addedHost = {
+      nodeType: 1,
+      shadowRoot: addedShadowRoot,
+      querySelectorAll: () => [],
+    };
+    const documentObserver = observers.find((observer) =>
+      observer.targets.some(({ target }) => target === context.document),
+    );
+    if (!documentObserver) {
+      throw new Error('Expected Safe Search to observe for newly added shadow roots.');
+    }
+    documentObserver.callback([{ addedNodes: [addedHost] }]);
+    if (!addedShadowRoot.getElementById('focuslock-outbrain-image-filter')) {
+      throw new Error('Expected Outbrain images in newly added open shadow roots to be hidden.');
+    }
+
+    const allowedShadowRoot = createShadowRoot();
+    const allowedHost = {
+      nodeType: 1,
+      shadowRoot: allowedShadowRoot,
+      querySelectorAll: () => [],
+    };
+    context.document.querySelectorAll = () => [existingHost, allowedHost];
+    context.chrome.runtime.sendMessage = (message, callback) => {
+      callback({ success: true, filtered: false });
+    };
+    vm.runInContext(code, context, { timeout: 2000 });
+    if (allowedShadowRoot.getElementById('focuslock-outbrain-image-filter')) {
+      throw new Error('Expected whitelisted frames to keep shadow-root media unfiltered.');
     }
 
     console.log('safe-search-inject VM smoke test passed');
