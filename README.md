@@ -135,10 +135,16 @@ The repository includes regression tests for:
 - blocked-page activation with the configured default duration
 - mode-specific duration-page wording and session handling
 
-Run the test suite from the project root:
+Run the full test suite from the project root:
 
 ```bash
-node tests/url-param-parser.test.js && node tests/safe-search-inject.test.js && node tests/safe-search-media.test.js && node tests/safe-search-duration-mode.test.js && node tests/blocked-search-mode-activation.test.js && node tests/options-search-duration.test.js
+node tests/url-param-parser.test.js && \
+node tests/safe-search-inject.test.js && \
+node tests/safe-search-media.test.js && \
+node tests/safe-search-duration-mode.test.js && \
+node tests/blocked-search-mode-activation.test.js && \
+node tests/options-search-duration.test.js && \
+node tests/blocked-page-refresh.test.js
 ```
 
 ---

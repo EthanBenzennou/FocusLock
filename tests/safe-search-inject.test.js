@@ -126,18 +126,6 @@ const code = fs.readFileSync(path.join(__dirname, '..', 'safe-search-inject.js')
       findById(bodyChildren.map((entry) => entry.node), id),
     createElement: makeElement,
     querySelectorAll: () => [existingHost],
-    createElement: (tag) => {
-      const el = {
-        tagName: tag,
-        style: {},
-        id: null,
-        appendChild: () => {},
-        addEventListener: () => {},
-        parentNode: { removeChild: () => {} },
-      };
-      created.push(el);
-      return el;
-    },
   };
 
   context.window = {
@@ -244,6 +232,8 @@ const code = fs.readFileSync(path.join(__dirname, '..', 'safe-search-inject.js')
     vm.runInContext(code, context, { timeout: 2000 });
     if (allowedShadowRoot.getElementById('focuslock-outbrain-image-filter')) {
       throw new Error('Expected whitelisted frames to keep shadow-root media unfiltered.');
+    }
+
     let nestedFrameRequest;
     const nestedContext = {
       ...context,
