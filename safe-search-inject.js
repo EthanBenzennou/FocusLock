@@ -2,6 +2,61 @@
   const HEADER_ID = "focuslock-timer-header";
   const SPACER_ID = "focuslock-timer-header-spacer";
   const HEADER_HEIGHT = 42;
+  const OUTBRAIN_IMAGE_STYLE_ID = "focuslock-outbrain-image-filter";
+  const OUTBRAIN_IMAGE_STYLE = `
+    img[src^="https://images.outbrainimg.com/" i],
+    img[src^="http://images.outbrainimg.com/" i],
+    img[src^="//images.outbrainimg.com/" i] {
+      display: none !important;
+      visibility: hidden !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
+  `;
+
+  function installOutbrainShadowImageFilter() {
+    if (
+      typeof MutationObserver !== "function" ||
+      typeof document.querySelectorAll !== "function"
+    ) {
+      return;
+    }
+
+    const observedRoots = new WeakSet();
+    const observer = new MutationObserver((records) => {
+      for (const record of records) {
+        for (const node of record.addedNodes) {
+          scanForShadowRoots(node);
+        }
+      }
+    });
+
+    function scanForShadowRoots(root) {
+      const elements = [];
+      if (root?.nodeType === 1) elements.push(root);
+      if (typeof root?.querySelectorAll === "function") {
+        elements.push(...root.querySelectorAll("*"));
+      }
+
+      for (const element of elements) {
+        const shadowRoot = element.shadowRoot;
+        if (!shadowRoot || observedRoots.has(shadowRoot)) continue;
+
+        observedRoots.add(shadowRoot);
+        if (!shadowRoot.getElementById(OUTBRAIN_IMAGE_STYLE_ID)) {
+          const style = document.createElement("style");
+          style.id = OUTBRAIN_IMAGE_STYLE_ID;
+          style.textContent = OUTBRAIN_IMAGE_STYLE;
+          shadowRoot.appendChild(style);
+        }
+        observer.observe(shadowRoot, { childList: true, subtree: true });
+        scanForShadowRoots(shadowRoot);
+      }
+    }
+
+    observer.observe(document, { childList: true, subtree: true });
+    scanForShadowRoots(document);
+  }
 
   chrome.runtime.sendMessage(
     { type: "APPLY_SAFESEARCH_FILTER" },
@@ -16,6 +71,8 @@
           "Failed to apply Safe Search media filtering:",
           response?.error || "Unknown error",
         );
+      } else if (response.filtered) {
+        installOutbrainShadowImageFilter();
       }
     },
   );
