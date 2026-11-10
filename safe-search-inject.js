@@ -20,6 +20,8 @@
     },
   );
 
+  if (window.top !== window) return;
+
   function formatRemaining(ms) {
     if (ms <= 0) return "0s";
     const totalSeconds = Math.floor(ms / 1000);
@@ -35,6 +37,8 @@
     if (document.getElementById(HEADER_ID)) return;
 
     const body = document.body;
+    if (!body) return;
+
     const spacer = document.createElement("div");
     spacer.id = SPACER_ID;
     spacer.style.display = "block";
@@ -50,22 +54,47 @@
     header.style.right = "0";
     header.style.width = "100%";
     header.style.height = `${HEADER_HEIGHT}px`;
-    header.style.boxSizing = "border-box";
-    header.style.display = "flex";
-    header.style.alignItems = "center";
-    header.style.justifyContent = "space-between";
-    header.style.padding = "0 12px";
     header.style.zIndex = "2147483647";
-    header.style.background = "rgba(0,0,0,0.85)";
-    header.style.color = "white";
-    header.style.fontFamily = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
-    header.style.fontSize = "13px";
-    header.style.boxShadow = "0 2px 6px rgba(0,0,0,0.2)";
+    header.style.direction = "ltr";
+    header.style.unicodeBidi = "isolate";
+    header.style.fontFamily =
+      "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 
-    if (body) {
-      body.insertBefore(spacer, body.firstChild || null);
-      body.insertBefore(header, spacer.nextSibling || null);
-    }
+    const shadow = header.attachShadow({ mode: "open" });
+    const style = document.createElement("style");
+    style.textContent = `
+      :host {
+        all: initial;
+        direction: ltr;
+        unicode-bidi: isolate;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      }
+      *, *::before, *::after {
+        box-sizing: border-box;
+        font-family: inherit;
+        direction: ltr;
+        unicode-bidi: isolate;
+      }
+      button {
+        line-height: normal;
+      }
+    `;
+    shadow.appendChild(style);
+
+    const banner = document.createElement("div");
+    shadow.appendChild(banner);
+
+    banner.style.width = "100%";
+    banner.style.height = "100%";
+    banner.style.boxSizing = "border-box";
+    banner.style.display = "flex";
+    banner.style.alignItems = "center";
+    banner.style.justifyContent = "space-between";
+    banner.style.padding = "0 12px";
+    banner.style.background = "rgba(0,0,0,0.85)";
+    banner.style.color = "white";
+    banner.style.fontSize = "13px";
+    banner.style.boxShadow = "0 2px 6px rgba(0,0,0,0.2)";
 
     const left = document.createElement("div");
     left.style.display = "flex";
@@ -153,21 +182,18 @@
     right.appendChild(stopBtn);
     right.appendChild(closeBtn);
 
-    header.appendChild(left);
-    header.appendChild(right);
+    banner.appendChild(left);
+    banner.appendChild(right);
 
-    if (body) {
-      body.insertBefore(header, body.firstChild || null);
-    } else {
-      document.documentElement.appendChild(header);
-    }
+    body.insertBefore(spacer, body.firstChild || null);
+    body.insertBefore(header, spacer.nextSibling || null);
   }
 
   function removeHeader() {
     const el = document.getElementById(HEADER_ID);
     if (el && el.parentNode) el.parentNode.removeChild(el);
 
-    const spacer = document.body && document.body.querySelector ? document.body.querySelector('[style*="height: 42px"]') : null;
+    const spacer = document.getElementById(SPACER_ID);
     if (spacer && spacer.parentNode) spacer.parentNode.removeChild(spacer);
   }
 
@@ -186,7 +212,9 @@
         return;
       }
       createHeader();
-      const textEl = document.getElementById("focuslock-timer-text");
+      const textEl = document
+        .getElementById(HEADER_ID)
+        ?.shadowRoot.getElementById("focuslock-timer-text");
       if (textEl) textEl.textContent = ` — ${formatRemaining(remaining)}`;
     } catch (err) {
       // ignore
