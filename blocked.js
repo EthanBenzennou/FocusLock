@@ -76,13 +76,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   const safeSearchBtn = document.getElementById("safesearch-btn");
 
   if (isDomainOnly) {
-    messageEl.textContent = "This website is not on your whitelist:";
-    allowDomainBtn.textContent = "Add Website to Whitelist";
+    messageEl.textContent = "This site isn’t allowed.";
+    allowDomainBtn.textContent = "Allow site";
     allowPageBtn.style.display = "none";
   } else {
-    messageEl.textContent = "This page is not on your whitelist:";
-    allowDomainBtn.textContent = "Allow Entire Website";
-    allowPageBtn.textContent = "Allow This Specific Page";
+    messageEl.textContent = "This page isn’t allowed.";
+    allowDomainBtn.textContent = "Allow site";
+    allowPageBtn.textContent = "Allow page";
     allowPageBtn.style.display = "block";
   }
 

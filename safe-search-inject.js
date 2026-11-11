@@ -1,7 +1,7 @@
 (function () {
   const HEADER_ID = "focuslock-timer-header";
   const SPACER_ID = "focuslock-timer-header-spacer";
-  const HEADER_HEIGHT = 42;
+  const HEADER_HEIGHT = 48;
   const OUTBRAIN_IMAGE_STYLE_ID = "focuslock-outbrain-image-filter";
   const OUTBRAIN_IMAGE_STYLE = `
     img[src^="https://images.outbrainimg.com/" i],
@@ -147,16 +147,22 @@
     banner.style.display = "flex";
     banner.style.alignItems = "center";
     banner.style.justifyContent = "space-between";
-    banner.style.padding = "0 12px";
-    banner.style.background = "rgba(0,0,0,0.85)";
+    banner.style.padding = "0 18px";
+    banner.style.background = "rgba(20, 32, 54, 0.62)";
     banner.style.color = "white";
     banner.style.fontSize = "13px";
-    banner.style.boxShadow = "0 2px 6px rgba(0,0,0,0.2)";
+    banner.style.boxShadow = "0 3px 14px rgba(15, 23, 42, 0.2)";
+    banner.style.backdropFilter = "blur(12px)";
 
     const left = document.createElement("div");
     left.style.display = "flex";
     left.style.alignItems = "center";
-    left.style.gap = "10px";
+    left.style.gap = "8px";
+
+    const indicator = document.createElement("span");
+    indicator.textContent = "●";
+    indicator.style.color = "#7de0b0";
+    indicator.style.fontSize = "10px";
 
     const title = document.createElement("span");
     title.textContent = "Safe Search active";
@@ -166,21 +172,22 @@
     timer.id = "focuslock-timer-text";
     timer.style.marginLeft = "8px";
 
+    left.appendChild(indicator);
     left.appendChild(title);
     left.appendChild(timer);
 
     const right = document.createElement("div");
     right.style.display = "flex";
     right.style.alignItems = "center";
-    right.style.gap = "8px";
+    right.style.gap = "9px";
 
     const extendBtn = document.createElement("button");
     extendBtn.textContent = "Extend";
-    extendBtn.style.background = "#0052cc";
+    extendBtn.style.background = "#315ee8";
     extendBtn.style.color = "white";
     extendBtn.style.border = "none";
-    extendBtn.style.padding = "6px 10px";
-    extendBtn.style.borderRadius = "4px";
+    extendBtn.style.padding = "7px 12px";
+    extendBtn.style.borderRadius = "8px";
     extendBtn.style.cursor = "pointer";
     extendBtn.style.fontSize = "12px";
 
@@ -206,11 +213,11 @@
 
     const stopBtn = document.createElement("button");
     stopBtn.textContent = "Stop";
-    stopBtn.style.background = "#dc2626";
+    stopBtn.style.background = "#c93636";
     stopBtn.style.color = "white";
-    stopBtn.style.border = "none";
-    stopBtn.style.padding = "6px 10px";
-    stopBtn.style.borderRadius = "4px";
+    stopBtn.style.border = "1px solid #e05252";
+    stopBtn.style.padding = "7px 12px";
+    stopBtn.style.borderRadius = "8px";
     stopBtn.style.cursor = "pointer";
     stopBtn.style.fontSize = "12px";
 
@@ -221,7 +228,7 @@
 
     const closeBtn = document.createElement("button");
     closeBtn.textContent = "Hide";
-    closeBtn.style.background = "transparent";
+    closeBtn.style.background = "rgba(255,255,255,0.1)";
     closeBtn.style.color = "white";
     closeBtn.style.border = "1px solid rgba(255,255,255,0.2)";
     closeBtn.style.padding = "6px 10px";

@@ -24,18 +24,19 @@ document.addEventListener("DOMContentLoaded", async () => {
       title: "Start a fresh Safe Search session",
       subtitle:
         "Choose how long Safe Search should stay active before it turns off again.",
-      button: "Enable Safe Search",
+      button: "Start Safe Search",
     },
     extend: {
       pill: "Extend session",
       title: "Extend the current Safe Search session",
       subtitle:
         "Choose how much time to add to the current Safe Search session.",
-      button: "Extend Safe Search",
+      button: "Add time",
     },
   };
 
   if (modePill) modePill.textContent = modeConfig[mode].pill;
+  document.title = `${modeConfig[mode].pill} · FocusLock`;
   if (modeTitle) modeTitle.textContent = modeConfig[mode].title;
   if (modeSubtitle) modeSubtitle.textContent = modeConfig[mode].subtitle;
   applyBtn.textContent = modeConfig[mode].button;

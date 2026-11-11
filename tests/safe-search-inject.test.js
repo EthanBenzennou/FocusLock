@@ -147,7 +147,7 @@ const code = fs.readFileSync(path.join(__dirname, '..', 'safe-search-inject.js')
     }
 
     const [spacerEntry, headerEntry] = bodyChildren;
-    if (spacerEntry.node.style.height !== '42px') {
+    if (spacerEntry.node.style.height !== '48px') {
       throw new Error('Expected the spacer to reserve the header height.');
     }
 

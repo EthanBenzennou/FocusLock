@@ -61,6 +61,7 @@ When a Safe Search session expires:
 - `safe-search-duration.html` / `safe-search-duration.js` — duration prompt for starting or extending a Safe Search session
 - `safe-search-inject.js` — injected page header with timer, Extend, and Stop controls
 - `options.html` / `options.js` — settings UI, login flow, whitelist editing, and Safe Search controls
+- `focuslock.css` — shared responsive styling for the settings, blocked-site, and Safe Search duration screens
 - `secure-storage.js` — encrypted storage layer and password management
 - `whitelist-utils.js` — parsing and matching logic for whitelist entries and duration strings
 - `manifest.json` — Chrome extension manifest

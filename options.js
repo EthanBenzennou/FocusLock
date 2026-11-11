@@ -7,6 +7,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const passwordInput = document.getElementById("password-input");
   const loginBtn = document.getElementById("login-btn");
   const loginError = document.getElementById("login-error");
+  const savedMessage = document.getElementById("saved-message");
 
   const whitelistInput = document.getElementById("whitelist-input");
   const safeSearchToggle = document.getElementById("safesearch-toggle");
@@ -30,8 +31,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     const minutes = Number(safeSearchDefaultDuration.value);
     safeSearchDurationHint.textContent =
       Number.isInteger(minutes) && minutes > 0
-        ? `Default duration: ${minutes} mins`
-        : "Default duration: enter a valid number of minutes";
+        ? `A new session will last ${minutes} minute${minutes === 1 ? "" : "s"}.`
+        : "Enter a whole number of minutes greater than zero.";
   }
 
   let remainingInterval = null;
@@ -54,17 +55,17 @@ document.addEventListener("DOMContentLoaded", async () => {
         "safeSearchExpiresAt",
       ]);
       if (!safeSearch || !safeSearchExpiresAt) {
-        safeSearchRemaining.textContent = "Remaining: —";
+        safeSearchRemaining.textContent = "—";
         return;
       }
       const remaining = Number(safeSearchExpiresAt) - Date.now();
       if (remaining <= 0) {
-        safeSearchRemaining.textContent = "Remaining: 0s";
+        safeSearchRemaining.textContent = "0s";
         return;
       }
-      safeSearchRemaining.textContent = `Remaining: ${formatRemaining(remaining)}`;
+      safeSearchRemaining.textContent = formatRemaining(remaining);
     } catch (err) {
-      safeSearchRemaining.textContent = "Remaining: —";
+      safeSearchRemaining.textContent = "—";
     }
   }
 
@@ -101,6 +102,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   );
 
   loginBtn.addEventListener("click", async () => {
+    savedMessage.classList.add("hidden");
     const { passwordHash, passwordSalt } = await chrome.storage.local.get([
       "passwordHash",
       "passwordSalt",
@@ -120,6 +122,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       loginSection.classList.add("hidden");
       settingsSection.classList.remove("hidden");
       loginError.classList.add("hidden");
+      savedMessage.classList.add("hidden");
       whitelistInput.value = whitelist.join("\n");
       safeSearchToggle.checked = !!safeSearch;
       safeSearchDefaultDuration.value = String(
@@ -199,15 +202,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     settingsSection.classList.add("hidden");
     loginSection.classList.remove("hidden");
+    savedMessage.classList.remove("hidden");
     passwordInput.value = "";
     newPasswordInput.value = "";
 
     stopRemainingUpdater();
-
-    alert(
-      isSafeSearchEnabled
-        ? `Safe Search Mode active for ${timeLimit} mins.`
-        : "Strict Firewall active. Settings locked.",
-    );
   });
 });

@@ -1,152 +1,132 @@
 <!doctype html>
 <html>
   <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>FocusLock Settings</title>
-    <style>
-      body {
-        font-family:
-          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
-          Arial, sans-serif;
-        padding: 30px;
-        max-width: 400px;
-        margin: auto;
-        background-color: #f9f9f9;
-      }
-      .container {
-        background: white;
-        padding: 20px;
-        border-radius: 8px;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-      }
-      .hidden {
-        display: none;
-      }
-      textarea,
-      input[type="password"] {
-        width: 95%;
-        margin-bottom: 15px;
-        padding: 10px;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-      }
-      button {
-        padding: 10px;
-        background: #0052cc;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        width: 100%;
-        font-weight: bold;
-      }
-      button:hover {
-        background: #0043a6;
-      }
-      .error {
-        color: #d93025;
-        font-size: 0.9em;
-        margin-top: -10px;
-        margin-bottom: 15px;
-      }
-      .mode-box {
-        background: #e8f0fe;
-        padding: 15px;
-        border-radius: 4px;
-        margin-bottom: 15px;
-        border: 1px solid #c6dafc;
-      }
-      .mode-box label {
-        cursor: pointer;
-        display: flex;
-        align-items: flex-start;
-        gap: 10px;
-      }
-      .mode-box p {
-        margin: 0;
-        font-size: 0.85em;
-        color: #333;
-        margin-top: 4px;
-      }
-      .duration-box {
-        margin-top: 10px;
-        padding: 10px;
-        border: 1px solid #d2e3fc;
-        border-radius: 4px;
-        background: #f8fbff;
-      }
-      .duration-box label {
-        display: block;
-        font-size: 0.9em;
-        font-weight: 600;
-        margin-bottom: 6px;
-      }
-      .duration-box input {
-        width: 100%;
-        margin-bottom: 0;
-      }
-    </style>
+    <link rel="stylesheet" href="focuslock.css" />
   </head>
   <body>
-    <div class="container">
-      <h2>FocusLock</h2>
-      <div id="login-section">
-        <p>Enter your password to unlock the settings:</p>
-        <input
-          type="password"
-          id="password-input"
-          placeholder="Password (default: admin)"
-        />
-        <p id="login-error" class="error hidden">Incorrect password.</p>
-        <button id="login-btn">Unlock</button>
-      </div>
-      <div id="settings-section" class="hidden">
-        <p><strong>Whitelisted Domains or Pages (one per line):</strong></p>
-        <textarea
-          id="whitelist-input"
-          rows="8"
-          placeholder="Whole domain:&#10;github.com&#10;google.com&#10;&#10;Specific page only:&#10;stackoverflow.com/questions/12345&#10;wikipedia.org/wiki/Focus"
-        ></textarea>
-        <div class="mode-box">
-          <label>
-            <input type="checkbox" id="safesearch-toggle" />
-            <div>
-              <strong>Enable Safe Search Mode</strong>
-              <p>
-                Unblocks the entire internet, but forces all websites into
-                Text-Only Mode (strips all images, videos, and GIFs).
-              </p>
-            </div>
-          </label>
-          <div class="duration-box">
-            <label for="safesearch-default-duration">
-              Default Safe Search duration (minutes)
-            </label>
+    <main class="page">
+      <div class="brand"><span class="brand-mark" aria-hidden="true">FL</span> FocusLock</div>
+      <section class="card">
+        <div id="login-section">
+          <p class="eyebrow">Your focus, protected</p>
+          <h1 id="page-title">Unlock your settings</h1>
+          <p class="intro">
+            Enter your password to continue.
+          </p>
+          <label class="field" for="password-input">Password</label>
+          <div class="form-field">
             <input
-              id="safesearch-default-duration"
-              type="number"
-              min="1"
-              step="1"
-              value="60"
+              type="password"
+              id="password-input"
+              autocomplete="current-password"
+              aria-describedby="login-error"
             />
-            <p id="safesearch-duration-error" class="error hidden">
-              Enter a whole number of minutes greater than zero.
+            <p id="login-error" class="error hidden" role="alert">
+              That password didn’t match. Try again.
             </p>
-            <p id="safesearch-duration-hint">Default duration: 60 mins</p>
-            <p id="safesearch-remaining">Remaining: —</p>
-            <button id="safesearch-extend-btn" type="button">
-              Extend Safe Search
+          </div>
+          <p id="saved-message" class="notice hidden" role="status">
+            Settings saved. You’re back at the lock screen.
+          </p>
+          <button id="login-btn" class="primary-button">Unlock</button>
+        </div>
+        <div id="settings-section" class="hidden">
+          <p class="eyebrow">Settings</p>
+          <h1 id="settings-title">Set up your focus space</h1>
+          <p class="intro">
+            Choose allowed sites and Safe Search settings.
+          </p>
+
+          <section class="section">
+            <h2 class="section-heading">Allowed sites</h2>
+            <p class="section-copy">
+              One domain or page per line. Other sites are blocked.
+            </p>
+            <label class="field" for="whitelist-input">Domains and pages</label>
+            <textarea
+              id="whitelist-input"
+              rows="8"
+              spellcheck="false"
+              placeholder="github.com&#10;google.com&#10;wikipedia.org/wiki/Focus"
+            ></textarea>
+            <p class="field-hint">
+              A domain allows the whole site; a path allows one page.
+            </p>
+          </section>
+
+          <section class="section">
+            <h2 class="section-heading">Safe Search</h2>
+            <p class="section-copy">
+              Browse temporarily with images and videos hidden.
+            </p>
+            <div class="mode-card">
+              <label class="mode-label">
+                <input type="checkbox" id="safesearch-toggle" />
+                <div>
+                  <strong>Turn on Safe Search</strong>
+                  <p class="description">
+                    Temporarily allow sites in text-only mode.
+                  </p>
+                </div>
+              </label>
+              <div class="duration-settings">
+                <label class="field" for="safesearch-default-duration">
+                  Default session length (minutes)
+                </label>
+                <input
+                  id="safesearch-default-duration"
+                  type="number"
+                  min="1"
+                  step="1"
+                  value="60"
+                  inputmode="numeric"
+                />
+                <p id="safesearch-duration-error" class="error hidden" role="alert">
+                  Enter a whole number of minutes greater than zero.
+                </p>
+                <p id="safesearch-duration-hint" class="field-hint">
+                  A new session will last 60 minutes.
+                </p>
+                <div class="session-status">
+                  <p>Time remaining</p>
+                  <p id="safesearch-remaining" class="status-time">—</p>
+                </div>
+                <button
+                  id="safesearch-extend-btn"
+                  class="duration-action"
+                  type="button"
+                >
+                  Add time
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section class="section">
+            <h2 class="section-heading">Change password</h2>
+            <p class="section-copy">
+              Leave blank to keep your password.
+            </p>
+            <label class="field" for="new-password">New password</label>
+            <input
+              type="password"
+              id="new-password"
+              autocomplete="new-password"
+            />
+          </section>
+
+          <div class="settings-actions">
+            <button id="save-btn" class="primary-button">
+              Save &amp; lock
             </button>
           </div>
         </div>
-        <p><strong>Change Password:</strong></p>
-        <input
-          type="password"
-          id="new-password"
-          placeholder="Leave blank to keep current"
-        />
-        <button id="save-btn">Save Settings & Lock</button>
       </div>
-    </div>
+      </section>
+    </main>
     <script src="whitelist-utils.js"></script>
     <script src="secure-storage.js"></script>
     <script src="options.js"></script>

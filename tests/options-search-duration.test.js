@@ -40,6 +40,7 @@ function makeElement(id) {
   "password-input",
   "login-btn",
   "login-error",
+  "saved-message",
   "whitelist-input",
   "safesearch-toggle",
   "safesearch-default-duration",

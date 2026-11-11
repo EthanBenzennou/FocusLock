@@ -102,7 +102,7 @@ function runModeScenario(source) {
   }
 
   const extend = await runModeScenario('page');
-  if (extend.title !== 'Extend the current Safe Search session' || extend.apply !== 'Extend Safe Search') {
+  if (extend.title !== 'Extend the current Safe Search session' || extend.apply !== 'Add time') {
     throw new Error(`Unexpected extend-session wording: ${JSON.stringify(extend)}`);
   }
 
