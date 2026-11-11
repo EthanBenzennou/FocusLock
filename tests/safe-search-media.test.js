@@ -102,6 +102,18 @@ async function runBackgroundScenario(topLevelUrl, frameId) {
   ) {
     throw new Error("Expected the reported signature canvas to remain visible and interactive.");
   }
+  const imageBlockingRule = css.match(/img:not\([\s\S]*?\n\}/)?.[0];
+  const checkboxIconException =
+    '[class*="checkbox" i][class*="icon" i]';
+  if (
+    !imageBlockingRule?.includes(checkboxIconException) ||
+    !imageBlockingRule.includes('src*="captcha"') ||
+    !imageBlockingRule.includes("display: none !important")
+  ) {
+    throw new Error(
+      "Expected checkbox icon images to be exempt while other images remain blocked.",
+    );
+  }
   if (
     manifest.content_scripts?.some((script) =>
       script.css?.includes("hide-media.css"),

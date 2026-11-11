@@ -6,7 +6,9 @@
   background-image: none !important;
 }
 
-img:not([src*="captcha" i]):not([class*="captcha" i]):not([id*="captcha" i]) {
+img:not([src*="captcha" i]):not([class*="captcha" i]):not([id*="captcha" i]):not(
+    [class*="checkbox" i][class*="icon" i]
+  ) {
   display: none !important;
   visibility: hidden !important;
   opacity: 0 !important;
