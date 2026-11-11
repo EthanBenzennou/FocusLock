@@ -1,6 +1,5 @@
 (function () {
   const HEADER_ID = "focuslock-timer-header";
-  const SPACER_ID = "focuslock-timer-header-spacer";
   const HEADER_HEIGHT = 48;
   const OUTBRAIN_IMAGE_STYLE_ID = "focuslock-outbrain-image-filter";
   const OUTBRAIN_IMAGE_STYLE = `
@@ -58,9 +57,20 @@
     scanForShadowRoots(document);
   }
 
+  let shouldShowHeader = false;
+  let bodyOffset = null;
+
   chrome.runtime.sendMessage(
     { type: "APPLY_SAFESEARCH_FILTER" },
     (response) => {
+      if (window.top === window) {
+        shouldShowHeader =
+          !chrome.runtime.lastError &&
+          response?.success === true &&
+          response.filtered === true;
+        updateHeader();
+      }
+
       if (chrome.runtime.lastError) {
         console.error(
           "Failed to request Safe Search media filtering:",
@@ -94,28 +104,42 @@
     if (document.getElementById(HEADER_ID)) return;
 
     const body = document.body;
-    if (!body) return;
+    const root = document.documentElement;
+    if (!body || !root) return;
 
-    const spacer = document.createElement("div");
-    spacer.id = SPACER_ID;
-    spacer.style.display = "block";
-    spacer.style.width = "100%";
-    spacer.style.height = `${HEADER_HEIGHT}px`;
-    spacer.style.pointerEvents = "none";
+    const computedPaddingTop = Number.parseFloat(
+      window.getComputedStyle(body).paddingTop,
+    );
+    const originalPaddingTop = body.style.getPropertyValue("padding-top");
+    const originalPaddingPriority =
+      body.style.getPropertyPriority("padding-top");
+    const appliedPaddingTop = `calc(${Number.isFinite(computedPaddingTop) ? computedPaddingTop : 0}px + ${HEADER_HEIGHT}px)`;
 
     const header = document.createElement("div");
     header.id = HEADER_ID;
-    header.style.position = "fixed";
-    header.style.top = "0";
-    header.style.left = "0";
-    header.style.right = "0";
-    header.style.width = "100%";
-    header.style.height = `${HEADER_HEIGHT}px`;
-    header.style.zIndex = "2147483647";
-    header.style.direction = "ltr";
-    header.style.unicodeBidi = "isolate";
-    header.style.fontFamily =
-      "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+    header.style.setProperty("all", "initial", "important");
+    header.style.setProperty("position", "fixed", "important");
+    header.style.setProperty("top", "0", "important");
+    header.style.setProperty("left", "0", "important");
+    header.style.setProperty("right", "0", "important");
+    header.style.setProperty("width", "100%", "important");
+    header.style.setProperty("height", `${HEADER_HEIGHT}px`, "important");
+    header.style.setProperty("min-height", `${HEADER_HEIGHT}px`, "important");
+    header.style.setProperty("max-height", `${HEADER_HEIGHT}px`, "important");
+    header.style.setProperty("box-sizing", "border-box", "important");
+    header.style.setProperty("display", "block", "important");
+    header.style.setProperty("overflow", "hidden", "important");
+    header.style.setProperty("margin", "0", "important");
+    header.style.setProperty("padding", "0", "important");
+    header.style.setProperty("border", "0", "important");
+    header.style.setProperty("z-index", "2147483647", "important");
+    header.style.setProperty("direction", "ltr", "important");
+    header.style.setProperty("unicode-bidi", "isolate", "important");
+    header.style.setProperty(
+      "font-family",
+      "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+      "important",
+    );
 
     const shadow = header.attachShadow({ mode: "open" });
     const style = document.createElement("style");
@@ -239,7 +263,8 @@
     closeBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       const el = document.getElementById(HEADER_ID);
-      if (el) el.style.display = "none";
+      if (el) el.style.setProperty("display", "none", "important");
+      restoreBodyOffset();
     });
 
     right.appendChild(extendBtn);
@@ -249,20 +274,54 @@
     banner.appendChild(left);
     banner.appendChild(right);
 
-    body.insertBefore(spacer, body.firstChild || null);
-    body.insertBefore(header, spacer.nextSibling || null);
+    root.appendChild(header);
+    body.style.setProperty("padding-top", appliedPaddingTop, "important");
+    bodyOffset = {
+      body,
+      originalPaddingTop,
+      originalPaddingPriority,
+      appliedPaddingTop,
+    };
+  }
+
+  function restoreBodyOffset() {
+    if (!bodyOffset) return;
+
+    const {
+      body,
+      originalPaddingTop,
+      originalPaddingPriority,
+      appliedPaddingTop,
+    } = bodyOffset;
+    if (
+      body.style.getPropertyValue("padding-top") === appliedPaddingTop &&
+      body.style.getPropertyPriority("padding-top") === "important"
+    ) {
+      if (originalPaddingTop) {
+        body.style.setProperty(
+          "padding-top",
+          originalPaddingTop,
+          originalPaddingPriority,
+        );
+      } else {
+        body.style.removeProperty("padding-top");
+      }
+    }
+    bodyOffset = null;
   }
 
   function removeHeader() {
     const el = document.getElementById(HEADER_ID);
     if (el && el.parentNode) el.parentNode.removeChild(el);
-
-    const spacer = document.getElementById(SPACER_ID);
-    if (spacer && spacer.parentNode) spacer.parentNode.removeChild(spacer);
+    restoreBodyOffset();
   }
 
   async function updateHeader() {
     try {
+      if (!shouldShowHeader) {
+        removeHeader();
+        return;
+      }
       const stored = await chrome.storage.local.get(["safeSearch", "safeSearchExpiresAt"]);
       const safe = !!stored.safeSearch;
       const expiresAt = Number(stored.safeSearchExpiresAt) || 0;

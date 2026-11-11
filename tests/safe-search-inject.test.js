@@ -8,6 +8,11 @@ const code = fs.readFileSync(path.join(__dirname, '..', 'safe-search-inject.js')
   let filterRequest;
   const observers = [];
   const timers = [];
+  let storageChangeListener;
+  let storedState = {
+    safeSearch: true,
+    safeSearchExpiresAt: Date.now() + 60 * 1000,
+  };
   const context = {
     console,
     setInterval: (callback) => {
@@ -42,14 +47,39 @@ const code = fs.readFileSync(path.join(__dirname, '..', 'safe-search-inject.js')
     },
     storage: {
       local: {
-        get: () => Promise.resolve({ safeSearch: true, safeSearchExpiresAt: Date.now() + 60 * 1000 }),
+        get: () => Promise.resolve(storedState),
       },
-      onChanged: { addListener: () => {} },
+      onChanged: {
+        addListener: (listener) => {
+          storageChangeListener = listener;
+        },
+      },
     },
   };
 
   const created = [];
   const bodyChildren = [];
+  const rootChildren = [];
+  function makeStyle(initial = {}) {
+    const values = new Map(
+      Object.entries(initial).map(([key, value]) => [
+        key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`),
+        { value: String(value), priority: "" },
+      ]),
+    );
+    return {
+      setProperty(name, value, priority = "") {
+        values.set(name, { value: String(value), priority });
+        const key = name.replace(/-([a-z])/g, (_, letter) =>
+          letter.toUpperCase(),
+        );
+        this[key] = String(value);
+      },
+      getPropertyValue: (name) => values.get(name)?.value || "",
+      getPropertyPriority: (name) => values.get(name)?.priority || "",
+      removeProperty: (name) => values.delete(name),
+    };
+  }
   function createShadowRoot(children = []) {
     const styles = [];
     return {
@@ -80,7 +110,7 @@ const code = fs.readFileSync(path.join(__dirname, '..', 'safe-search-inject.js')
   function makeElement(tag) {
     const el = {
       tagName: tag,
-      style: {},
+      style: makeStyle(),
       children: [],
       id: null,
       textContent: "",
@@ -105,7 +135,7 @@ const code = fs.readFileSync(path.join(__dirname, '..', 'safe-search-inject.js')
   }
 
   const body = {
-    style: {},
+    style: makeStyle({ paddingTop: "12px" }),
     firstChild: null,
     insertBefore: (node, ref) => {
       const index = ref ? bodyChildren.findIndex((entry) => entry.node === ref) : -1;
@@ -117,19 +147,39 @@ const code = fs.readFileSync(path.join(__dirname, '..', 'safe-search-inject.js')
       bodyChildren.push({ node, ref: null });
       node.parentNode = body;
     },
+    removeChild: (node) => {
+      const index = bodyChildren.findIndex((entry) => entry.node === node);
+      if (index >= 0) bodyChildren.splice(index, 1);
+      node.parentNode = null;
+    },
+  };
+  const documentElement = {
+    nodeType: 1,
+    appendChild: (node) => {
+      rootChildren.push(node);
+      node.parentNode = documentElement;
+    },
+    removeChild: (node) => {
+      const index = rootChildren.indexOf(node);
+      if (index >= 0) rootChildren.splice(index, 1);
+      node.parentNode = null;
+    },
   };
   context.document = {
     nodeType: 9,
     body,
-    documentElement: { style: {}, appendChild: () => {} },
+    documentElement,
     getElementById: (id) =>
-      findById(bodyChildren.map((entry) => entry.node), id),
+      findById([...rootChildren, ...bodyChildren.map((entry) => entry.node)], id),
     createElement: makeElement,
     querySelectorAll: () => [existingHost],
   };
 
   context.window = {
     top: null,
+    getComputedStyle: (element) => ({
+      paddingTop: element.style.getPropertyValue("padding-top") || "0px",
+    }),
     addEventListener: () => {},
     open: () => {},
     location: { href: 'https://example.com' },
@@ -142,39 +192,59 @@ const code = fs.readFileSync(path.join(__dirname, '..', 'safe-search-inject.js')
     vm.runInContext(code, context, { timeout: 2000 });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    if (bodyChildren.length < 2) {
-      throw new Error('Expected both the spacer and the fixed header to be inserted above the page content.');
+    if (rootChildren.length !== 1) {
+      throw new Error('Expected the fixed Safe Search banner at the document root.');
     }
 
-    const [spacerEntry, headerEntry] = bodyChildren;
-    if (spacerEntry.node.style.height !== '48px') {
-      throw new Error('Expected the spacer to reserve the header height.');
+    const header = rootChildren[0];
+    if (
+      header.style.height !== "48px" ||
+      header.style.getPropertyPriority("height") !== "important" ||
+      header.style.getPropertyPriority("max-height") !== "important"
+    ) {
+      throw new Error('Expected a fixed 48px banner height protected from page CSS.');
     }
 
-    if (headerEntry.node.style.position !== 'fixed') {
-      throw new Error('Expected the banner to stay fixed to the viewport.');
+    if (
+      header.style.position !== "fixed" ||
+      header.style.getPropertyPriority("position") !== "important"
+    ) {
+      throw new Error('Expected the banner to stay fixed above page content.');
+    }
+    if (body.style.getPropertyValue("padding-top") !== "calc(12px + 48px)") {
+      throw new Error("Expected the page to be offset below the banner.");
     }
     if (
-      headerEntry.node.style.direction !== "ltr" ||
-      !headerEntry.node.shadowRoot.children[0].textContent.includes(
+      header.style.direction !== "ltr" ||
+      !header.shadowRoot.children[0].textContent.includes(
         "direction: ltr",
       ) ||
-      !headerEntry.node.shadowRoot.children[0].textContent.includes(
+      !header.shadowRoot.children[0].textContent.includes(
         "font-family:",
       )
     ) {
       throw new Error("Expected the banner to isolate its direction and font.");
     }
     if (
-      !headerEntry.node.shadowRoot.getElementById("focuslock-timer-text")
+      !header.shadowRoot.getElementById("focuslock-timer-text")
     ) {
       throw new Error("Expected the timer to be rendered in the banner shadow root.");
     }
-    if (spacerEntry.node.id !== 'focuslock-timer-header-spacer') {
-      throw new Error('Expected the spacer to be inserted before the page content.');
+    if (header.id !== 'focuslock-timer-header') {
+      throw new Error('Expected the banner to have a stable extension ID.');
     }
     if (filterRequest?.type !== 'APPLY_SAFESEARCH_FILTER') {
       throw new Error('Expected Safe Search to request per-frame media filtering.');
+    }
+
+    storedState = { safeSearch: false };
+    storageChangeListener({ safeSearch: { newValue: false } }, "local");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    if (rootChildren.length !== 0) {
+      throw new Error("Disabling Safe Search should remove the banner.");
+    }
+    if (body.style.getPropertyValue("padding-top") !== "12px") {
+      throw new Error("Removing the banner should restore the original page padding.");
     }
 
     const outbrainStyle = existingShadowRoot.getElementById(
@@ -230,8 +300,12 @@ const code = fs.readFileSync(path.join(__dirname, '..', 'safe-search-inject.js')
       callback({ success: true, filtered: false });
     };
     vm.runInContext(code, context, { timeout: 2000 });
+    await new Promise((resolve) => setTimeout(resolve, 0));
     if (allowedShadowRoot.getElementById('focuslock-outbrain-image-filter')) {
       throw new Error('Expected whitelisted frames to keep shadow-root media unfiltered.');
+    }
+    if (rootChildren.length !== 0) {
+      throw new Error('Whitelisted pages should not show the Safe Search banner.');
     }
 
     let nestedFrameRequest;
